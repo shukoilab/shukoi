@@ -30,7 +30,7 @@ jobs:
       - name: Mint GitHub App Token (If App Credentials Configured)
         id: app-token
         if: ${{ vars.SHUKOI_BOT_APP_ID != '' }}
-        uses: actions/create-github-app-token@df432cee43462cd2231d47042f354c25e9d3a232 # v2.0.2
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
         with:
           app-id: ${{ vars.SHUKOI_BOT_APP_ID }}
           private-key: ${{ secrets.SHUKOI_BOT_PRIVATE_KEY }}
@@ -48,7 +48,7 @@ jobs:
         with:
           token: ${{ steps.bot-auth.outputs.token }}
 
-      - uses: pnpm/action-setup@a7487c7e89a18df4990f7f222e4898a3bc666dd4 # v4.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 12
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -69,7 +69,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Create Pull Request (Automatically Triggers CI Quality Gates)
-        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1d3d365e1 # v7.0.8
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
         with:
           token: ${{ steps.bot-auth.outputs.token }}
           commit-message: 'chore(deps): weekly 3rd-party dependency updates'
