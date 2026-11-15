@@ -116,9 +116,17 @@ export async function scaffoldProject(
     jose: '^5.9.6',
   };
 
+  if (
+    options.products.includes('api') ||
+    options.targets.includes('cloudflare') ||
+    options.targets.includes('lambda') ||
+    options.targets.includes('selfhost')
+  ) {
+    dependencies['hono'] = '^4.7.0';
+  }
+
   if (options.products.includes('api')) {
     dependencies['@shukoi/api'] = '^1.0.0';
-    dependencies['hono'] = '^4.7.0';
   }
 
   if (options.products.includes('mcp-http') || options.products.includes('mcp-stdio')) {
@@ -166,6 +174,18 @@ export async function scaffoldProject(
   };
 
   await writeFile('package.json', `${JSON.stringify(pkgJson, null, 2)}\n`);
+
+  // .gitignore
+  const gitignoreContent = `node_modules/
+dist/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+`;
+  await writeFile('.gitignore', gitignoreContent);
 
   if (options.includeLinter !== false) {
     const projectBiomeJson = {
@@ -242,8 +262,8 @@ export const config: ShukoiConfig = createDefaultConfig({
   await writeFile('src/config.ts', configCode);
 
   // 4. Sample Action: src/actions/health.ts
-  const healthActionCode = `import { Type } from '@sinclair/typebox';
-import { defineAction } from '@shukoi/core';
+  const healthActionCode = `import { defineAction } from '@shukoi/core';
+import { Type } from '@sinclair/typebox';
 
 export const healthAction = defineAction({
   name: 'healthCheck',
@@ -276,8 +296,8 @@ export const healthAction = defineAction({
   await writeFile('src/actions/health.ts', healthActionCode);
 
   // 5. Test Suite: test/health.test.ts
-  const healthTestCode = `import { describe, it, expect } from 'vitest';
-import { createActionTestHarness } from '@shukoi/core/testing';
+  const healthTestCode = `import { createActionTestHarness } from '@shukoi/core/testing';
+import { describe, expect, it } from 'vitest';
 import { healthAction } from '../src/actions/health.js';
 
 describe('healthAction', () => {
@@ -291,7 +311,93 @@ describe('healthAction', () => {
 `;
   await writeFile('test/health.test.ts', healthTestCode);
 
-  // 6. AI Agent Context & Constitutional Files
+  // 6. Target Entrypoints Generation
+  if (options.products.includes('api') && options.targets.includes('selfhost')) {
+    const selfhostCode = `import { createRestRouter } from '@shukoi/api';
+import { createSelfHostServer } from '@shukoi/selfhost';
+import { healthAction } from '../actions/health.js';
+import { config } from '../config.js';
+
+const app = createRestRouter([healthAction], config);
+export const server = createSelfHostServer(app, config);
+`;
+    await writeFile('src/entries/selfhost.ts', selfhostCode);
+  }
+
+  if (options.targets.includes('cloudflare')) {
+    const cloudflareCode = options.products.includes('api')
+      ? `import { createRestRouter } from '@shukoi/api';
+import { toCloudflareWorker } from '@shukoi/cloudflare';
+import { healthAction } from '../actions/health.js';
+import { config } from '../config.js';
+
+const app = createRestRouter([healthAction], config);
+export default toCloudflareWorker(app);
+`
+      : `import { compileMcpCatalog, createMcpHttpHandler } from '@shukoi/mcp/http';
+import { toCloudflareWorker } from '@shukoi/cloudflare';
+import { Hono } from 'hono';
+import { healthAction } from '../actions/health.js';
+import { config } from '../config.js';
+
+const app = new Hono();
+const catalog = compileMcpCatalog([healthAction]);
+const handler = createMcpHttpHandler(catalog, config);
+app.all('/mcp', async (c) => handler(c.req.raw, c.env));
+export default toCloudflareWorker(app);
+`;
+    await writeFile('src/entries/cloudflare.ts', cloudflareCode);
+  }
+
+  if (options.targets.includes('lambda')) {
+    const lambdaCode = options.products.includes('api')
+      ? `import { createRestRouter } from '@shukoi/api';
+import { toLambdaHandler } from '@shukoi/lambda';
+import { healthAction } from '../actions/health.js';
+import { config } from '../config.js';
+
+const app = createRestRouter([healthAction], config);
+export const handler = toLambdaHandler(app, { config });
+`
+      : `import { compileMcpCatalog, createMcpHttpHandler } from '@shukoi/mcp/http';
+import { toLambdaHandler } from '@shukoi/lambda';
+import { Hono } from 'hono';
+import { healthAction } from '../actions/health.js';
+import { config } from '../config.js';
+
+const app = new Hono();
+const catalog = compileMcpCatalog([healthAction]);
+const mcpHandler = createMcpHttpHandler(catalog, config);
+app.all('/mcp', async (c) => mcpHandler(c.req.raw, c.env));
+export const handler = toLambdaHandler(app, { config });
+`;
+    await writeFile('src/entries/lambda.ts', lambdaCode);
+  }
+
+  if (options.products.includes('mcp-http')) {
+    const mcpHttpCode = `import { compileMcpCatalog, createMcpHttpHandler } from '@shukoi/mcp/http';
+import { healthAction } from '../actions/health.js';
+import { config } from '../config.js';
+
+const catalog = compileMcpCatalog([healthAction]);
+export const handler = createMcpHttpHandler(catalog, config);
+`;
+    await writeFile('src/entries/mcp-http.ts', mcpHttpCode);
+  }
+
+  if (options.products.includes('mcp-stdio')) {
+    const mcpStdioCode = `import { compileMcpCatalog } from '@shukoi/mcp';
+import { startStdioServer } from '@shukoi/mcp/stdio';
+import { healthAction } from '../actions/health.js';
+import { config } from '../config.js';
+
+const catalog = compileMcpCatalog([healthAction]);
+export const server = startStdioServer(catalog, config);
+`;
+    await writeFile('src/entries/mcp-stdio.ts', mcpStdioCode);
+  }
+
+  // 7. AI Agent Context & Constitutional Files
   const appAgentsMd = `# ${options.projectName} Application Constitution (AGENTS.md)
 
 ## 1. Project Overview & Verification Commands
