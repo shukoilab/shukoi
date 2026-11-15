@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "references": [
+    { "path": "./packages/core" },
+    { "path": "./packages/api" },
+    { "path": "./packages/mcp" },
+    { "path": "./packages/cloudflare" },
+    { "path": "./packages/lambda" },
+    { "path": "./packages/selfhost" },
+    { "path": "./packages/create-shukoi" }
+  ]
+}

@@ -1,0 +1,86 @@
+name: CI Quality Gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  static-and-package-audit:
+    name: Biome, Build & Export Map Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: pnpm/action-setup@a7487c7e89a18df4990f7f222e4898a3bc666dd4 # v4.1.0
+        with:
+          version: 12
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Dependencies (Frozen Lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Static Analysis & Architecture Guardrails (Biome)
+        run: pnpm run lint
+
+      - name: Build All Packages & Generate Isolated Declarations
+        run: pnpm -r run build
+
+      - name: Audit NPM Exports & Subpath Types (publint + attw)
+        run: |
+          pnpm dlx publint packages/core packages/api packages/mcp packages/cloudflare packages/lambda packages/selfhost
+          pnpm dlx @arethetypeswrong/cli --pack packages/core --profile esm-only
+          pnpm dlx @arethetypeswrong/cli --pack packages/mcp --profile esm-only
+
+      - name: Verify Zero node:* Leakage for Edge Runtime
+        run: |
+          pnpm dlx esbuild packages/core/dist/index.js packages/api/dist/index.js packages/mcp/dist/http.js packages/cloudflare/dist/index.js \
+            --bundle --platform=browser --format=esm --outdir=/tmp/edge-audit \
+            --external:hono --external:@sinclair/typebox --external:@modelcontextprotocol/sdk
+
+  quality-gates-matrix:
+    name: Quality Gates (${{ matrix.runtime }})
+    needs: static-and-package-audit
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [node-22, bun-latest]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: pnpm/action-setup@a7487c7e89a18df4990f7f222e4898a3bc666dd4 # v4.1.0
+        with:
+          version: 12
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        if: matrix.runtime == 'node-22'
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca946eb624829724 # v2.0.2
+        if: matrix.runtime == 'bun-latest'
+        with:
+          bun-version: latest
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Packages
+        run: pnpm -r run build
+
+      - name: Run Vitest Quality Gates (QG-01 to QG-07 with --expose-gc)
+        if: matrix.runtime == 'node-22'
+        run: pnpm run test:ci
+
+      - name: Run Quality Gates on Bun Runtime
+        if: matrix.runtime == 'bun-latest'
+        run: bun run test:ci

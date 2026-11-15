@@ -1,0 +1,31 @@
+{
+  "name": "@shukoi/lambda",
+  "version": "1.0.0",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@shukoi/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "hono": "^4.7.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.147",
+    "@sinclair/typebox": "^0.34.0",
+    "hono": "^4.7.0"
+  }
+}

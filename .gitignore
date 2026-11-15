@@ -1,0 +1,45 @@
+# Dependencies & Package Managers
+node_modules/
+.pnpm-store/
+
+# Production Build Outputs (Root & All Packages)
+dist/
+**/dist/
+*.tsbuildinfo
+**/*.tsbuildinfo
+.turbo/
+
+# Testing & Coverage
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment & Sensitive Files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# OS & Editor Files
+.DS_Store
+Thumbs.db
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+
+# ==========================================
+# INTERNAL CONFIDENTIAL (STRICTLY DO NOT PUBLISH)
+# ==========================================
+PRD.md
+PRD*.md
+*.prd.md
+.agent/
+.agent/**

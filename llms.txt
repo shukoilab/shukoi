@@ -1,0 +1,29 @@
+# Shukoi Framework (@shukoi/*)
+
+> Enterprise-grade, ultra-fast, transport-agnostic TypeScript micro-framework. Write business logic once in defineAction() and automatically expose REST APIs, OpenAPI 3.1, MCP HTTP, and MCP STDIO across Cloudflare Workers, AWS Lambda, and Self-Host (Bun/Node).
+
+## Core Architecture & Guidelines
+- [AGENTS.md](AGENTS.md): Authoritative repository constitution, Twelve Architectural Laws, and coding standards.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): Deep architectural specification, 8-step execution pipeline, cancellation, and backpressure.
+- [README.md](README.md): Developer quickstart, package matrix, and installation guide.
+
+## Architecture Decision Records (ADRs)
+- [ADR 001: Adaptive TypeBox JIT](docs/adr/001-adaptive-typebox-jit.md): JIT compilation in Node/Bun with AST fallback on Cloudflare Workers isolates.
+- [ADR 002: Per-Request Scoped MCP Server](docs/adr/002-per-request-mcp-server.md): Eliminating singleton _transport race conditions under concurrent HTTP calls.
+- [ADR 003: Single-Flight JWKS Discovery](docs/adr/003-single-flight-jwks-discovery.md): Mutex coalescing concurrent cache-miss fetches into 1 network call.
+- [ADR 004: Stream-Bounded Body Parsing](docs/adr/004-stream-bounded-body-parsing.md): Chunk byte counter aborting at maxBodyBytes preventing chunked OOM attacks.
+- [ADR 005: Sterile stdout and Anti-Zombie Watchdog](docs/adr/005-sterile-stdout-and-anti-zombie.md): Reserving FD 1 for JSON-RPC frames and terminating on stdin pipe closure.
+
+## Agent Skills
+- [Skill: Create Action](skills/shukoi-create-action/SKILL.md): Step-by-step procedural guide for creating protocol-agnostic 1-file actions.
+- [Skill: Deploy Target](skills/shukoi-deploy-target/SKILL.md): Adapting Shukoi apps to Cloudflare Workers, AWS Lambda, and Bun/Node self-host.
+- [Skill: Quality Gates](skills/shukoi-quality-gates/SKILL.md): Authoring and verifying mandatory CI Quality Gates QG-01 through QG-07.
+
+## Scoped Packages
+- [@shukoi/core](packages/core/AGENTS.md): Action engine, adaptive validator, single-flight auth, sterile logger, and testing harness.
+- [@shukoi/api](packages/api/AGENTS.md): Hono REST router, stream-bounded reader, OpenAPI 3.1 generator, and RFC 9457 Problem Details.
+- [@shukoi/mcp](packages/mcp/AGENTS.md): Streamable HTTP (DNS-rebinding protected) and STDIO (backpressure drain) MCP servers.
+- [@shukoi/cloudflare](packages/cloudflare/AGENTS.md): Cloudflare Workers V8 Isolate adapter with waitUntil integration.
+- [@shukoi/lambda](packages/lambda/AGENTS.md): AWS Lambda adapter with dynamic deadline calculation.
+- [@shukoi/selfhost](packages/selfhost/AGENTS.md): Bun and Node server with graceful drain state machine and /healthz probes.
+- [create-shukoi](packages/create-shukoi/AGENTS.md): Interactive and CI project scaffolder CLI.

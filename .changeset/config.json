@@ -1,0 +1,19 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
+  "changelog": ["@changesets/changelog-github", { "repo": "shukoilab/shukoi" }],
+  "commit": false,
+  "fixed": [
+    [
+      "@shukoi/core",
+      "@shukoi/api",
+      "@shukoi/mcp",
+      "@shukoi/cloudflare",
+      "@shukoi/lambda",
+      "@shukoi/selfhost",
+      "create-shukoi"
+    ]
+  ],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch"
+}

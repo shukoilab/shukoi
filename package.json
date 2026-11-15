@@ -1,0 +1,38 @@
+{
+  "name": "shukoi-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "typecheck": "tsc -b",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "test": "NODE_OPTIONS='--expose-gc' vitest run",
+    "test:ci": "NODE_OPTIONS='--expose-gc' vitest run --reporter=verbose",
+    "test:qg": "NODE_OPTIONS='--expose-gc' vitest run test/qg-*.test.ts",
+    "release:version": "changeset version && node scripts/sync-cli-template-versions.mjs && pnpm install --lockfile-only",
+    "release:publish": "pnpm -r run build && changeset publish"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@biomejs/biome": "^2.6.7",
+    "@changesets/changelog-github": "^1.0.1",
+    "@changesets/cli": "^3.0.3",
+    "@shukoi/api": "workspace:*",
+    "@shukoi/cloudflare": "workspace:*",
+    "@shukoi/core": "workspace:*",
+    "@shukoi/lambda": "workspace:*",
+    "@shukoi/mcp": "workspace:*",
+    "@shukoi/selfhost": "workspace:*",
+    "@sinclair/typebox": "^0.34.52",
+    "@types/node": "^22.13.4",
+    "create-shukoi": "workspace:*",
+    "esbuild": "^0.28.2",
+    "publint": "^0.3.25",
+    "taze": "^21.3.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "name": "@shukoi/selfhost",
+  "version": "1.0.0",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@shukoi/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@hono/node-server": "^1.13.8",
+    "hono": "^4.7.0"
+  },
+  "peerDependenciesMeta": {
+    "@hono/node-server": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@hono/node-server": "^1.13.8",
+    "@sinclair/typebox": "^0.34.0",
+    "hono": "^4.7.0"
+  }
+}

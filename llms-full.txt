@@ -1,0 +1,113 @@
+# SHUKOI MICRO-FRAMEWORK: COMPLETE SYSTEM REFERENCE (`llms-full.txt`)
+
+## 1. Executive Summary & Paradigm
+
+Shukoi (`@shukoi/*`) is an enterprise-grade, transport-agnostic TypeScript micro-framework.
+Engineers write business logic, input/output schemas, security policies, and execution metadata once in a single declarative file using `defineAction()`.
+
+This single declaration automatically exposes:
+1. REST API + OpenAPI 3.1.0 Specification (via `@shukoi/api`)
+2. MCP Streamable HTTP Server (via `@shukoi/mcp/http`)
+3. MCP STDIO Local Server & Remote HTTP Bridge (via `@shukoi/mcp/stdio`)
+
+Across three deployment runtime targets:
+1. Cloudflare Workers (V8 Isolates via `@shukoi/cloudflare`)
+2. AWS Lambda (Node.js 22+ ESM via `@shukoi/lambda`)
+3. Self-Host (Bun 1.2+ / Node.js 22+ / Docker via `@shukoi/selfhost`)
+
+---
+
+## 2. The Twelve Non-Negotiable Architectural Laws
+
+1. Zero-Guesswork Contracts: Strict TypeBox schemas for input and output.
+2. Zero-Hardcoding: All thresholds and timeouts injected via ShukoiConfig.
+3. Zero Memory Leaks: Bounded capacity LRU stores with TTL; unref timers.
+4. Zero Race Conditions: Frozen execution contexts; Single-Flight Mutex for JWKS; atomic Idempotency Locks.
+5. Zero Zombie Processes: Watchdog monitoring stdin/stdout and signals; graceful drain with 503 ready probe.
+6. Strict stdout Sterility: FD 1 reserved for JSON-RPC frames in STDIO mode with drain backpressure; logs route to stderr.
+7. Pure Web-Standard Core: Zero node:* imports in @shukoi/core, @shukoi/api, @shukoi/mcp/http, and @shukoi/cloudflare.
+8. Isolate-Safe Adaptive Validation: TypeCompiler JIT in Node/Bun with Value.Check AST fallback in Cloudflare Workers.
+9. Stream-Level Defense-in-Depth: Chunk byte counter aborting at maxBodyBytes; prototype stripping; depth limits.
+10. Output Data Sanitization: Value.Clean(outputSchema, result) stripping unexposed ORM fields.
+11. Protocol-Agnostic Business Logic: Handlers interact exclusively with typed input and ActionExecutionContext.
+12. Composite Cancellation: AbortSignal.any combining client disconnect, action timeout, and container deadline.
+
+---
+
+## 3. Public API Reference
+
+### 3.1 @shukoi/core
+
+#### defineAction(definition)
+Creates a compiled, frozen action with pre-compiled TypeBox validators.
+```typescript
+import { Type } from '@sinclair/typebox';
+import { defineAction } from '@shukoi/core';
+
+export const myAction = defineAction({
+  name: 'myAction',
+  description: 'Action description',
+  authRequired: false,
+  http: { method: 'POST', path: '/my-action', successStatus: 200 },
+  mcp: { enabled: true, entityType: 'tool' },
+  input: Type.Object({ text: Type.String() }, { additionalProperties: false }),
+  output: Type.Object({ echo: Type.String() }, { additionalProperties: false }),
+  async handler(input, ctx) {
+    ctx.logger.info('Executing action', { text: input.text });
+    return { echo: input.text };
+  },
+});
+```
+
+#### executeAction(action, rawInput, options)
+The unified 8-step pipeline: correlation tracking -> cancellation -> auth & scopes -> idempotency -> input validation -> handler invocation -> output clean & validate -> LIFO onFinally teardown.
+
+#### createDefaultConfig(overrides) / validateShukoiConfig(raw)
+Generates and validates deeply frozen ShukoiConfig instances.
+
+#### DomainError(code, detail, statusCode?, errors?)
+Typed exception class serializing to RFC 9457 Problem Details.
+
+---
+
+### 3.2 @shukoi/api
+
+#### createRestRouter(actions, config, options?)
+Creates a Hono REST application with CORS, `/openapi.json` route, parameter merging (`Query < Body < Path`), and RFC 9457 error serialization.
+
+#### readBoundedJsonStream(stream, maxBytes)
+Reads chunks from a ReadableStreamDefaultReader, aborting with HTTP 413 the instant cumulative bytes exceed maxBytes.
+
+---
+
+### 3.3 @shukoi/mcp
+
+#### compileMcpCatalog(actions)
+Compiles actions into frozen tools, resources, and prompts lists at boot.
+
+#### createScopedMcpServer(catalog, options)
+Creates a lightweight per-connection MCP server isolating headers and abort signals.
+
+#### createMcpHttpHandler(catalog, config, options?)
+Exposes stateless MCP HTTP endpoints with Host and Origin pinning against DNS-rebinding.
+
+#### startStdioServer(catalog, config, options?)
+Starts local STDIO MCP server with console hijacking to stderr and drain backpressure handling.
+
+---
+
+### 3.4 Runtime Adapters
+
+- `@shukoi/cloudflare`: `toCloudflareWorker(app)` returning `{ fetch(request, env, executionCtx) }`.
+- `@shukoi/lambda`: `toLambdaHandler(app, options)` calculating dynamic deadline minus `lambdaDeadlineBufferMs`.
+- `@shukoi/selfhost`: `createSelfHostServer(app, config, options)` with `/healthz/live`, `/healthz/ready`, and graceful drain state machine.
+
+---
+
+## 4. Architecture Decision Records (ADRs) Summary
+
+- ADR 001: Adaptive TypeBox JIT: Capability probe `new Function` vs AST fallback for Cloudflare Workers.
+- ADR 002: Per-Request Scoped MCP Server: Avoids singleton `_transport` overwrite race conditions under concurrent HTTP requests.
+- ADR 003: Single-Flight JWKS Discovery: Mutex coalescing concurrent cache-miss fetches into 1 network call.
+- ADR 004: Stream-Bounded Body Parsing: Chunk byte counter aborting at maxBodyBytes preventing chunked OOM attacks.
+- ADR 005: Sterile stdout and Anti-Zombie Watchdog: Reserving FD 1 for JSON-RPC frames and terminating on stdin pipe closure.
