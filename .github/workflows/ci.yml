@@ -98,7 +98,8 @@ jobs:
       pull-requests: write
     steps:
       - name: Automatically Merge Verified Release PR
-        run: gh pr merge "$PR_NUMBER" --merge --subject "chore(release): version packages"
+        run: |
+          gh pr merge "$PR_NUMBER" --merge --subject "chore(release): version packages"
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_REPO: ${{ github.repository }}

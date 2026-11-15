@@ -111,4 +111,13 @@ describe('CI/CD & Release Pipeline Integrity', () => {
     expect(content).toContain('GH_REPO: $' + '{{ github.repository }}');
     expect(content).toContain('gh pr merge "$PR_NUMBER"');
   });
+
+  it('verifies all GitHub Actions workflow files parse as valid YAML without syntax errors', () => {
+    expect(() => {
+      execSync(
+        'python3 -c "import glob, yaml; [yaml.safe_load(open(f)) for f in glob.glob(\'.github/workflows/*.yml\')]"',
+        { encoding: 'utf-8', cwd: process.cwd() },
+      );
+    }).not.toThrow();
+  });
 });
