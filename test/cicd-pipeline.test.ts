@@ -99,4 +99,16 @@ describe('CI/CD & Release Pipeline Integrity', () => {
     );
     expect(output).toContain('Done');
   });
+
+  it('verifies CI quality gates workflow declares auto-merge job with strict dependency gating', async () => {
+    const ciPath = path.resolve('.github', 'workflows', 'ci.yml');
+    const content = await fs.readFile(ciPath, 'utf-8');
+
+    expect(content).toContain('auto-merge-release:');
+    expect(content).toContain('needs: [static-and-package-audit, quality-gates-matrix]');
+    expect(content).toContain("github.head_ref == 'changeset-release/main'");
+    expect(content).toContain('github.event.pull_request.head.repo.full_name == github.repository');
+    expect(content).toContain('GH_REPO: $' + '{{ github.repository }}');
+    expect(content).toContain('gh pr merge "$PR_NUMBER"');
+  });
 });

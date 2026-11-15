@@ -84,3 +84,22 @@ jobs:
       - name: Run Quality Gates on Bun Runtime
         if: matrix.runtime == 'bun-latest'
         run: bun run test:ci
+
+  auto-merge-release:
+    name: Auto-Merge Release PR
+    needs: [static-and-package-audit, quality-gates-matrix]
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'changeset-release/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Automatically Merge Verified Release PR
+        run: gh pr merge "$PR_NUMBER" --merge --subject "chore(release): version packages"
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.SHUKOI_BOT_TOKEN || secrets.GITHUB_TOKEN }}
