@@ -1,6 +1,6 @@
 {
   "name": "create-shukoi",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Official interactive terminal and CI automation project scaffolder CLI for the Shukoi micro-framework.",
   "keywords": [
     "shukoi",

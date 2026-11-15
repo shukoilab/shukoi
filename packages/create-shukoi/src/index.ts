@@ -111,7 +111,7 @@ export async function scaffoldProject(
 
   // 1. Dependency Pruning in package.json
   const dependencies: Record<string, string> = {
-    '@shukoi/core': '^1.0.1',
+    '@shukoi/core': '^1.0.2',
     '@sinclair/typebox': '^0.34.52',
     jose: '^5.9.6',
   };

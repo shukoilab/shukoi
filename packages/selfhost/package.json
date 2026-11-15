@@ -1,6 +1,6 @@
 {
   "name": "@shukoi/selfhost",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Standalone Bun 1.2+ and Node.js 22+ HTTP server with graceful draining state machine and Kubernetes health probes for Shukoi.",
   "keywords": [
     "shukoi",
