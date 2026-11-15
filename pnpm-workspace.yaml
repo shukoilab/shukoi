@@ -1,6 +1,14 @@
 packages:
   - 'packages/*'
 
+allowBuilds:
+  esbuild: true
+  taze: true
+
+onlyBuiltDependencies:
+  - esbuild
+  - taze
+
 minimumReleaseAge: 1440
 
 
