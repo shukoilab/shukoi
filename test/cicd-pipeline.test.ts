@@ -120,4 +120,14 @@ describe('CI/CD & Release Pipeline Integrity', () => {
       );
     }).not.toThrow();
   });
+
+  it('verifies all GitHub Actions workflow files enforce upstream owner repository isolation', async () => {
+    const workflowDir = path.resolve('.github', 'workflows');
+    const files = ['ci.yml', 'deps-weekly.yml', 'release.yml'];
+
+    for (const file of files) {
+      const content = await fs.readFile(path.join(workflowDir, file), 'utf-8');
+      expect(content).toContain("github.repository == 'shukoilab/shukoi'");
+    }
+  });
 });

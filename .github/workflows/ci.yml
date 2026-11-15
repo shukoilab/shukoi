@@ -16,6 +16,7 @@ permissions:
 jobs:
   static-and-package-audit:
     name: Biome, Build & Export Map Audit
+    if: github.repository == 'shukoilab/shukoi'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -51,6 +52,7 @@ jobs:
   quality-gates-matrix:
     name: Quality Gates (${{ matrix.runtime }})
     needs: static-and-package-audit
+    if: github.repository == 'shukoilab/shukoi'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -89,6 +91,7 @@ jobs:
     name: Auto-Merge Release PR
     needs: [static-and-package-audit, quality-gates-matrix]
     if: |
+      github.repository == 'shukoilab/shukoi' &&
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.head_ref == 'changeset-release/main'

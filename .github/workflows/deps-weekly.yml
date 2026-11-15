@@ -25,6 +25,7 @@ permissions:
 jobs:
   check-and-create-pr:
     name: Check 3rd-Party Updates & Open Tested PR
+    if: github.repository == 'shukoilab/shukoi'
     runs-on: ubuntu-latest
     steps:
       - name: Mint GitHub App Token (If App Credentials Configured)
