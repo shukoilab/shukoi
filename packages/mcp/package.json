@@ -1,10 +1,33 @@
 {
   "name": "@shukoi/mcp",
   "version": "1.0.1",
+  "description": "Model Context Protocol (MCP) Streamable HTTP and backpressure-safe sterile STDIO transports for Shukoi.",
+  "keywords": [
+    "shukoi",
+    "mcp",
+    "model-context-protocol",
+    "llm",
+    "claude",
+    "cursor",
+    "stdio",
+    "streamable-http",
+    "json-rpc",
+    "ai-agent"
+  ],
+  "license": "MIT",
+  "author": "shukoilab",
+  "homepage": "https://github.com/shukoilab/shukoi#readme",
+  "bugs": "https://github.com/shukoilab/shukoi/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shukoilab/shukoi.git",
+    "directory": "packages/mcp"
+  },
   "type": "module",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "exports": {
     "./http": {

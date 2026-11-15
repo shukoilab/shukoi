@@ -1,15 +1,37 @@
 {
   "name": "create-shukoi",
   "version": "1.0.1",
-  "type": "module",
-  "files": [
-    "bin",
-    "dist",
-    "README.md"
+  "description": "Official interactive terminal and CI automation project scaffolder CLI for the Shukoi micro-framework.",
+  "keywords": [
+    "shukoi",
+    "create-shukoi",
+    "scaffolder",
+    "cli",
+    "boilerplate",
+    "template",
+    "starter",
+    "mcp",
+    "hono"
   ],
+  "license": "MIT",
+  "author": "shukoilab",
+  "homepage": "https://github.com/shukoilab/shukoi#readme",
+  "bugs": "https://github.com/shukoilab/shukoi/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shukoilab/shukoi.git",
+    "directory": "packages/create-shukoi"
+  },
+  "type": "module",
   "bin": {
     "create-shukoi": "./bin/create-shukoi.js"
   },
+  "files": [
+    "bin",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

@@ -1,10 +1,31 @@
 {
   "name": "@shukoi/cloudflare",
   "version": "1.0.1",
+  "description": "Cloudflare Workers V8 Isolate runtime adapter with waitUntil lifecycle integration for Shukoi.",
+  "keywords": [
+    "shukoi",
+    "cloudflare",
+    "cloudflare-workers",
+    "v8-isolates",
+    "edge",
+    "serverless",
+    "waituntil",
+    "hono"
+  ],
+  "license": "MIT",
+  "author": "shukoilab",
+  "homepage": "https://github.com/shukoilab/shukoi#readme",
+  "bugs": "https://github.com/shukoilab/shukoi/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shukoilab/shukoi.git",
+    "directory": "packages/cloudflare"
+  },
   "type": "module",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

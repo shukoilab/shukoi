@@ -1,10 +1,31 @@
 {
   "name": "@shukoi/lambda",
   "version": "1.0.1",
+  "description": "AWS Lambda runtime adapter with dynamic deadline calculation and early 504 timeout protection for Shukoi.",
+  "keywords": [
+    "shukoi",
+    "aws",
+    "lambda",
+    "aws-lambda",
+    "serverless",
+    "api-gateway",
+    "alb",
+    "function-url"
+  ],
+  "license": "MIT",
+  "author": "shukoilab",
+  "homepage": "https://github.com/shukoilab/shukoi#readme",
+  "bugs": "https://github.com/shukoilab/shukoi/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shukoilab/shukoi.git",
+    "directory": "packages/lambda"
+  },
   "type": "module",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

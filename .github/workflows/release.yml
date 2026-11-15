@@ -41,7 +41,8 @@ jobs:
           publish-script: pnpm release:publish
           pr-title: 'chore(release): version packages'
           commit-message: 'chore(release): version packages'
+          github-token: ${{ secrets.SHUKOI_BOT_TOKEN || secrets.GITHUB_TOKEN }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.SHUKOI_BOT_TOKEN || secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true

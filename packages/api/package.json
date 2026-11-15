@@ -1,10 +1,33 @@
 {
   "name": "@shukoi/api",
   "version": "1.0.1",
+  "description": "Hono REST router, stream-bounded chunked reader, OpenAPI 3.1.0 generator, and RFC 9457 Problem Details for Shukoi.",
+  "keywords": [
+    "shukoi",
+    "hono",
+    "rest",
+    "api",
+    "openapi",
+    "openapi3",
+    "rfc9457",
+    "problem-details",
+    "stream-reader",
+    "http"
+  ],
+  "license": "MIT",
+  "author": "shukoilab",
+  "homepage": "https://github.com/shukoilab/shukoi#readme",
+  "bugs": "https://github.com/shukoilab/shukoi/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shukoilab/shukoi.git",
+    "directory": "packages/api"
+  },
   "type": "module",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
