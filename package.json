@@ -20,6 +20,9 @@
     "test": "NODE_OPTIONS='--expose-gc' vitest run",
     "test:ci": "NODE_OPTIONS='--expose-gc' vitest run --reporter=verbose",
     "test:qg": "NODE_OPTIONS='--expose-gc' vitest run test/qg-*.test.ts",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "node scripts/generate-docs-spec.mjs && vitepress build docs",
+    "docs:preview": "vitepress preview docs",
     "release:version": "changeset version && node scripts/sync-cli-template-versions.mjs && pnpm install --lockfile-only",
     "release:publish": "pnpm -r run build && changeset publish"
   },
@@ -41,6 +44,7 @@
     "publint": "^0.3.25",
     "taze": "^21.3.0",
     "typescript": "^5.7.3",
+    "vitepress": "^1.6.4",
     "vitest": "^3.0.5"
   }
 }

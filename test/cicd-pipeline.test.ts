@@ -15,9 +15,9 @@ import { describe, expect, it } from 'vitest';
 import { syncCliTemplateVersions } from '../scripts/sync-cli-template-versions.mjs';
 
 describe('CI/CD & Release Pipeline Integrity', () => {
-  it('verifies that all 3 workflow YAML files exist and use 40-character commit SHA pinning', async () => {
+  it('verifies that all 4 workflow YAML files exist and use 40-character commit SHA pinning', async () => {
     const workflowDir = path.resolve('.github', 'workflows');
-    const files = ['ci.yml', 'deps-weekly.yml', 'release.yml'];
+    const files = ['ci.yml', 'deps-weekly.yml', 'release.yml', 'pages.yml'];
 
     for (const file of files) {
       const content = await fs.readFile(path.join(workflowDir, file), 'utf-8');

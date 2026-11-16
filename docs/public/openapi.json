@@ -1,0 +1,652 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "shukoi-service",
+    "version": "1.0.0",
+    "description": "Shukoi Auto-Generated OpenAPI 3.1.0 Specification"
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Default Server"
+    }
+  ],
+  "paths": {
+    "/api/v1/payments": {
+      "post": {
+        "operationId": "processPayment",
+        "summary": "Authorizes and captures a credit card payment with idempotency guarantee",
+        "description": "Processes a single payment transaction using atomic idempotency locks and tokenized credit credentials.",
+        "tags": [
+          "Actions"
+        ],
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "transactionId",
+                    "status",
+                    "amount",
+                    "currency",
+                    "createdAt"
+                  ],
+                  "properties": {
+                    "transactionId": {
+                      "description": "Unique immutable transaction identifier",
+                      "type": "string"
+                    },
+                    "status": {
+                      "anyOf": [
+                        {
+                          "const": "SUCCEEDED",
+                          "type": "string"
+                        },
+                        {
+                          "const": "PENDING",
+                          "type": "string"
+                        },
+                        {
+                          "const": "FAILED",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "amount": {
+                      "type": "integer"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request / Malformed Payload",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / Insufficient Scopes",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Contract Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "amount",
+                  "currency",
+                  "sourceToken",
+                  "customerId"
+                ],
+                "properties": {
+                  "amount": {
+                    "minimum": 100,
+                    "description": "Transaction amount in smallest currency unit (e.g. cents)",
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "description": "Three-letter ISO 4217 currency code",
+                    "examples": [
+                      "USD",
+                      "EUR",
+                      "IDR"
+                    ],
+                    "type": "string"
+                  },
+                  "sourceToken": {
+                    "description": "Tokenized payment source token obtained via client SDK",
+                    "type": "string"
+                  },
+                  "customerId": {
+                    "description": "Unique customer identifier",
+                    "examples": [
+                      "cus_94012"
+                    ],
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}": {
+      "get": {
+        "operationId": "getUserProfile",
+        "summary": "Retrieves user profile and account status by user ID",
+        "description": "Fetches detailed user account information, profile settings, and subscription status.",
+        "tags": [
+          "Actions"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path parameter: id"
+          },
+          {
+            "name": "includeStats",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "Optional query flag to include aggregate activity statistics",
+              "type": "boolean"
+            },
+            "description": "Optional query flag to include aggregate activity statistics"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "email",
+                    "name",
+                    "role",
+                    "createdAt"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "format": "email",
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "anyOf": [
+                        {
+                          "const": "admin",
+                          "type": "string"
+                        },
+                        {
+                          "const": "member",
+                          "type": "string"
+                        },
+                        {
+                          "const": "viewer",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request / Malformed Payload",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / Insufficient Scopes",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Contract Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/events": {
+      "get": {
+        "operationId": "listEvents",
+        "summary": "Lists security and audit log events with multi-value filtering",
+        "description": "Queries audit trail log records supporting array query parameters and timestamp boundaries.",
+        "tags": [
+          "Actions"
+        ],
+        "parameters": [
+          {
+            "name": "tags",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "Multi-value query parameter array of event tags (e.g. ?tags=auth&tags=deploy)",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Multi-value query parameter array of event tags (e.g. ?tags=auth&tags=deploy)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "description": "Maximum records to return (default 50)",
+              "type": "integer"
+            },
+            "description": "Maximum records to return (default 50)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "events",
+                    "total"
+                  ],
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "type",
+                          "timestamp"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "timestamp": {
+                            "format": "date-time",
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request / Malformed Payload",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / Insufficient Scopes",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Contract Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "healthCheck",
+        "summary": "Kubernetes and load balancer liveness health probe",
+        "description": "Returns instant HTTP 200 status indicating application availability.",
+        "tags": [
+          "Actions"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "uptimeSeconds",
+                    "timestamp"
+                  ],
+                  "properties": {
+                    "status": {
+                      "const": "HEALTHY",
+                      "type": "string"
+                    },
+                    "uptimeSeconds": {
+                      "type": "number"
+                    },
+                    "timestamp": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request / Malformed Payload",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden / Insufficient Scopes",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Contract Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT Bearer authentication"
+      },
+      "apiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key",
+        "description": "Static API Key authentication"
+      }
+    }
+  }
+}

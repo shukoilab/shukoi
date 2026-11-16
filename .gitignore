@@ -5,6 +5,8 @@ node_modules/
 # Production Build Outputs (Root & All Packages)
 dist/
 **/dist/
+.vitepress/cache/
+**/.vitepress/cache/
 *.tsbuildinfo
 **/*.tsbuildinfo
 .turbo/
