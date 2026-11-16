@@ -111,7 +111,7 @@ export async function scaffoldProject(
 
   // 1. Dependency Pruning in package.json
   const dependencies: Record<string, string> = {
-    '@shukoi/core': '^1.0.2',
+    '@shukoi/core': '^1.0.3',
     '@sinclair/typebox': '^0.34.52',
     jose: '^5.9.6',
   };
@@ -132,28 +132,28 @@ export async function scaffoldProject(
   }
 
   if (options.products.includes('api')) {
-    dependencies['@shukoi/api'] = '^1.0.2';
+    dependencies['@shukoi/api'] = '^1.0.3';
   }
 
   if (options.products.includes('mcp-http') || options.products.includes('mcp-stdio')) {
-    dependencies['@shukoi/mcp'] = '^1.0.2';
+    dependencies['@shukoi/mcp'] = '^1.0.3';
     dependencies['@modelcontextprotocol/sdk'] = '^1.32.2';
   }
 
   if (options.targets.includes('cloudflare')) {
-    dependencies['@shukoi/cloudflare'] = '^1.0.2';
+    dependencies['@shukoi/cloudflare'] = '^1.0.3';
     devDependencies['wrangler'] = '^3.114.0';
     devDependencies['@cloudflare/workers-types'] = '^4.20260200.0';
   }
 
   if (options.targets.includes('lambda')) {
-    dependencies['@shukoi/lambda'] = '^1.0.2';
+    dependencies['@shukoi/lambda'] = '^1.0.3';
     devDependencies['@types/aws-lambda'] = '^8.10.147';
     devDependencies['esbuild'] = '^0.25.0';
   }
 
   if (options.targets.includes('selfhost')) {
-    dependencies['@shukoi/selfhost'] = '^1.0.2';
+    dependencies['@shukoi/selfhost'] = '^1.0.3';
   }
 
   const scripts: Record<string, string> = {

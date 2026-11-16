@@ -1,6 +1,6 @@
 {
   "name": "@shukoi/core",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Universal action engine, adaptive TypeBox validation core, and authentication layer for the Shukoi micro-framework.",
   "keywords": [
     "shukoi",

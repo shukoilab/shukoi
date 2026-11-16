@@ -1,6 +1,6 @@
 {
   "name": "@shukoi/cloudflare",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Cloudflare Workers V8 Isolate runtime adapter with waitUntil lifecycle integration for Shukoi.",
   "keywords": [
     "shukoi",
