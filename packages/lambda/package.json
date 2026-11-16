@@ -1,6 +1,6 @@
 {
   "name": "@shukoi/lambda",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "AWS Lambda runtime adapter with dynamic deadline calculation and early 504 timeout protection for Shukoi.",
   "keywords": [
     "shukoi",
