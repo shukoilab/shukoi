@@ -152,4 +152,62 @@ describe('AI Context & Documentation Architecture', () => {
     expect(archContent).toContain('7.2 AWS Lambda Adapter');
     expect(archContent).toContain('7.3 Self-Host Server Adapter');
   });
+
+  it('validates Protocol Module A (API) and B (MCP) documentation and architecture completeness', async () => {
+    // 1. docs/ARCHITECTURE.md Section 8 and Section 9
+    const archPath = path.resolve('docs', 'ARCHITECTURE.md');
+    const archContent = await fs.readFile(archPath, 'utf-8');
+    expect(archContent).toContain(
+      '## 8. Protocol Module A: REST, OpenAPI 3.1.0 & RFC 9457 Architecture',
+    );
+    expect(archContent).toContain('8.1 Deterministic Parameter Merge Priority');
+    expect(archContent).toContain('8.2 Stream-Bounded Body Parsing');
+    expect(archContent).toContain('8.3 Safe Primitive Coercion & Array Query Parameters');
+    expect(archContent).toContain('8.4 Automated OpenAPI 3.1.0 Specification Compilation');
+    expect(archContent).toContain('8.5 Universal RFC 9457 Problem Details State Machine');
+
+    expect(archContent).toContain(
+      '## 9. Protocol Module B: Model Context Protocol (MCP) Architecture',
+    );
+    expect(archContent).toContain('9.1 Stateless Per-Request Scoped Servers (ADR-002)');
+    expect(archContent).toContain('9.2 Complete Native Support for Core MCP Primitives');
+    expect(archContent).toContain('9.3 Streamable HTTP Transport');
+    expect(archContent).toContain('9.4 Sterile STDIO Transport & Anti-Zombie Watchdog');
+
+    // 2. packages/api/README.md
+    const apiReadmePath = path.resolve('packages', 'api', 'README.md');
+    const apiReadmeContent = await fs.readFile(apiReadmePath, 'utf-8');
+    expect(apiReadmeContent).toContain('OpenAPI 3.1.0');
+    expect(apiReadmeContent).toContain('readBoundedJsonStream');
+    expect(apiReadmeContent).toContain('RFC 9457');
+    expect(apiReadmeContent).toContain('Deterministic Parameter Merge Priority');
+    expect(apiReadmeContent).toContain('Multi-Value Array Query Parameters');
+    expect(apiReadmeContent).toContain('Safe Primitive Coercion');
+    expect(apiReadmeContent).toContain('docs/ARCHITECTURE.md');
+
+    // 3. packages/mcp/README.md
+    const mcpReadmePath = path.resolve('packages', 'mcp', 'README.md');
+    const mcpReadmeContent = await fs.readFile(mcpReadmePath, 'utf-8');
+    expect(mcpReadmeContent).toContain('Core MCP Primitives Supported');
+    expect(mcpReadmeContent).toContain('tools/call');
+    expect(mcpReadmeContent).toContain('resources/read');
+    expect(mcpReadmeContent).toContain('prompts/get');
+    expect(mcpReadmeContent).toContain('@shukoi/mcp/http');
+    expect(mcpReadmeContent).toContain('@shukoi/mcp/stdio');
+    expect(mcpReadmeContent).toContain('DELETE /mcp');
+    expect(mcpReadmeContent).toContain('docs/ARCHITECTURE.md');
+
+    // 4. skills/shukoi-create-action/SKILL.md
+    const createActionSkillPath = path.resolve('skills', 'shukoi-create-action', 'SKILL.md');
+    const createActionSkillContent = await fs.readFile(createActionSkillPath, 'utf-8');
+    expect(createActionSkillContent).toContain("entityType: 'tool'");
+    expect(createActionSkillContent).toContain("entityType: 'resource'");
+    expect(createActionSkillContent).toContain("entityType: 'prompt'");
+
+    // 5. skills/shukoi-deploy-target/SKILL.md
+    const deploySkillPath = path.resolve('skills', 'shukoi-deploy-target', 'SKILL.md');
+    const deploySkillContent = await fs.readFile(deploySkillPath, 'utf-8');
+    expect(deploySkillContent).toContain('mountMcpHttpRoutes');
+    expect(deploySkillContent).toContain('startStdioServer');
+  });
 });

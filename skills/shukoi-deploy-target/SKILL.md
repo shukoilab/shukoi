@@ -248,4 +248,52 @@ expect(mockPlatform.serverState()).toBe('HEALTHY');
 
 ---
 
+## 4. Co-Hosting Model Context Protocol (MCP) Across Targets
+
+Shukoi applications author business logic once and can simultaneously expose REST APIs and Model Context Protocol (MCP) endpoints across all runtime targets:
+
+### Co-Hosting REST API & MCP HTTP on the Same Hono Server
+To serve REST routes on `/api/...` and Streamable HTTP MCP on `/mcp` using the same Hono router instance:
+```typescript
+import { createRestRouter } from '@shukoi/api';
+import { compileMcpCatalog, mountMcpHttpRoutes } from '@shukoi/mcp/http';
+import { actions } from '../actions/index.js';
+import { config } from '../config.js';
+
+const app = createRestRouter(actions, config);
+const catalog = compileMcpCatalog(actions);
+
+// Mounts GET /mcp (info), POST /mcp (JSON-RPC), and DELETE /mcp (session teardown)
+mountMcpHttpRoutes(app, '/mcp', catalog, config);
+
+export default app;
+```
+
+### Local Desktop AI Agent STDIO Server (`src/entries/mcp-stdio.ts`)
+To connect desktop LLM clients (Claude Desktop, Cursor, OpenCode) directly to Shukoi actions over standard I/O:
+```typescript
+import { compileMcpCatalog } from '@shukoi/mcp';
+import { startStdioServer } from '@shukoi/mcp/stdio';
+import { actions } from '../actions/index.js';
+import { config } from '../config.js';
+
+const catalog = compileMcpCatalog(actions);
+
+// Hijacks console to stderr, respects backpressure drain, and enforces anti-zombie termination
+export const server = startStdioServer(catalog, config);
+```
+Configure `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "my-service": {
+      "command": "node",
+      "args": ["dist/entries/mcp-stdio.js"]
+    }
+  }
+}
+```
+
+---
+
 For complete runtime capability comparisons, read [references/runtime-matrix.md](references/runtime-matrix.md).

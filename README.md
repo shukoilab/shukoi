@@ -188,8 +188,8 @@ Every scaffolded project includes:
 | Package Name | Purpose | Node.js Built-ins | Target Runtime |
 | :--- | :--- | :--- | :--- |
 | **`@shukoi/core`** | Action Engine, Adaptive Validator, Auth, Sterile Logger, Testing Harness | **Forbidden** (Pure Web Standard) | All Runtimes |
-| **`@shukoi/api`** | Hono REST Router, Stream-Bounded Reader, OpenAPI 3.1.0 Generator | **Forbidden** (Pure Web Standard) | All Runtimes |
-| **`@shukoi/mcp`** | Streamable HTTP (`./http`) & Sterile STDIO (`./stdio`) MCP Transports | Only in `./stdio` | Edge & Node/Bun |
+| **`@shukoi/api`** | Hono REST Router, Stream-Bounded Reader, OpenAPI 3.1.0 Generator (query params, securitySchemes), RFC 9457 Problem Details | **Forbidden** (Pure Web Standard) | All Runtimes |
+| **`@shukoi/mcp`** | Streamable HTTP (`./http`: DELETE 204, DNS-rebinding) & Sterile STDIO (`./stdio`: FIFO queue, backpressure) MCP (Tools, Resources, Prompts) | Only in `./stdio` | Edge & Node/Bun |
 | **`@shukoi/cloudflare`**| Cloudflare Workers V8 Isolate Adapter (`getCloudflareContext`, `waitUntil`, `./testing` mocks) | **Forbidden** (Pure Web Standard) | Cloudflare Workers |
 | **`@shukoi/lambda`** | AWS Lambda Adapter with dynamic deadline subtraction (`getLambdaContext`, cookies, `./testing` mocks) | Permitted | AWS Lambda |
 | **`@shukoi/selfhost`** | Bun/Node Server with Graceful Drain, OOM 413 defense (`getSelfHostContext`, probes, `./testing` mocks) | Permitted | Bun 1.2+ / Node 22+ |

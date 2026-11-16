@@ -73,26 +73,32 @@ Typed exception class serializing to RFC 9457 Problem Details.
 ### 3.2 @shukoi/api
 
 #### createRestRouter(actions, config, options?)
-Creates a Hono REST application with CORS, `/openapi.json` route, parameter merging (`Query < Body < Path`), and RFC 9457 error serialization.
+Creates a Hono REST application with CORS, `/openapi.json` route, parameter merging (`Query < Body < Path`), safe leading-zero string coercion, multi-value array queries, `customContentType` egress, `Idempotent-Replayed: true` header emission, and universal RFC 9457 error serialization (including `app.notFound()` 404 handler).
 
 #### readBoundedJsonStream(stream, maxBytes)
-Reads chunks from a ReadableStreamDefaultReader, aborting with HTTP 413 the instant cumulative bytes exceed maxBytes.
+Reads chunks from a ReadableStreamDefaultReader, aborting with HTTP 413 the instant cumulative bytes exceed maxBytes without trusting Content-Length.
+
+#### generateOpenApiSpec(actions, config)
+Generates living OpenAPI 3.1.0 document with auto-extracted query parameters for `GET`/`DELETE`, root `servers: [{ url: '/' }]`, `components.securitySchemes` (`bearerAuth` and `apiKeyAuth`), and operation `security`.
 
 ---
 
 ### 3.3 @shukoi/mcp
 
 #### compileMcpCatalog(actions)
-Compiles actions into frozen tools, resources, and prompts lists at boot.
+Compiles actions into frozen tools, resources (with static URIs and RFC 6570 templates), and prompts (with argument schema introspection) lists at boot.
 
 #### createScopedMcpServer(catalog, options)
-Creates a lightweight per-connection MCP server isolating headers and abort signals.
+Creates an isolated per-connection MCP server handling `tools/list`, `tools/call` (multimodal content blocks), `resources/list`, `resources/read` (template parameter extraction), `prompts/list`, and `prompts/get`.
 
 #### createMcpHttpHandler(catalog, config, options?)
-Exposes stateless MCP HTTP endpoints with Host and Origin pinning against DNS-rebinding.
+Exposes stateless MCP HTTP endpoints with Host and Origin pinning against DNS-rebinding, `Accept` negotiation, and HTTP 204 `DELETE` session teardown.
+
+#### mountMcpHttpRoutes(app, path, catalog, config, options?)
+Mounts MCP HTTP routes onto an existing Hono REST application for single-port co-hosting.
 
 #### startStdioServer(catalog, config, options?)
-Starts local STDIO MCP server with console hijacking to stderr and drain backpressure handling.
+Starts local STDIO MCP server with pure stdin readline, console hijacking to stderr, and FIFO backpressure-safe outbound frame queue (`enqueueFrameWrite`).
 
 ---
 

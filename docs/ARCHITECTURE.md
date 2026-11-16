@@ -162,3 +162,61 @@ Shukoi applications decouple business logic completely from server infrastructur
 - **Deterministic Graceful Drain State Machine:** Traps POSIX `SIGTERM` and `SIGINT` signals. Transitions state `STARTING` $\rightarrow$ `HEALTHY` $\rightarrow$ `DRAINING` $\rightarrow$ `TERMINATED`. Rejects new ingress with 503, drains active in-flight requests up to `shutdownGracePeriodMs`, destroys keep-alive sockets, runs `onShutdown()` teardown hooks, and exits code 0.
 - **In-Memory Testing Doubles (`@shukoi/selfhost/testing`):** Exports `createMockSelfHostContext` for testing client IP, port, and server state in Vitest without binding live OS network sockets.
 - **Container Hardening:** Turnkey scaffolding generates a multi-stage `Dockerfile` (`node:22-alpine`, non-root user `USER node`, frozen lockfile) and `.dockerignore`.
+
+---
+
+## 8. Protocol Module A: REST, OpenAPI 3.1.0 & RFC 9457 Architecture
+
+Shukoi’s `@shukoi/api` exposes declarative actions over Web-Standard HTTP REST endpoints using Hono as the underlying routing kernel, without binding to any Node.js built-ins.
+
+### 8.1 Deterministic Parameter Merge Priority
+To prevent path-override injection attacks, parameters are strictly merged in ascending precedence:
+$$\text{Query Parameters} < \text{JSON Body} < \text{Path Parameters}$$
+Path segments (e.g. `/orders/:id`) take absolute precedence. An attacker cannot inject or spoof an entity ID by providing a conflicting `id` in the query string or request body.
+
+### 8.2 Stream-Bounded Body Parsing (`readBoundedJsonStream`)
+Instead of trusting the `Content-Length` header (which can be omitted or manipulated via `Transfer-Encoding: chunked`), bodies are consumed chunk-by-chunk using a `ReadableStreamDefaultReader` with an accumulating byte counter:
+- If cumulative bytes exceed `config.limits.maxBodyBytes`, the reader is immediately aborted with `reader.cancel('PAYLOAD_TOO_LARGE')` and throws HTTP 413 RFC 9457 Problem Details (`PAYLOAD_TOO_LARGE`).
+- This guarantees memory overhead is strictly bounded ($O(1)$ chunk overhead), preventing chunked-stream OOM DoS attacks.
+
+### 8.3 Safe Primitive Coercion & Array Query Parameters
+- **Leading-Zero Preservation:** Query parameters are inherently strings. Standard parsing converts `"42"` to number `42` and `"true"` to boolean `true`. However, strings matching `/^0\d+$/` (e.g. `"01234"`, `"007"`) are strictly preserved as strings, preventing data corruption on postal codes, NIK, or phone numbers.
+- **Multi-Value Query Arrays:** Uses Hono's `c.req.queries()` to automatically normalize repeated query keys (e.g. `?tags=a&tags=b` or `?tags[]=x`) into typed arrays before schema validation.
+
+### 8.4 Automated OpenAPI 3.1.0 Specification Compilation
+Directly compiles living OpenAPI 3.1.0 specifications from frozen TypeBox schemas:
+- **Query Parameter Projection:** For `GET` and `DELETE` routes, schema properties in `action.input` that do not exist in the path are automatically projected into `parameters: [{ in: 'query', name, schema, required, description }]`.
+- **Security Schemes:** Automatically defines root `components.securitySchemes` (`bearerAuth` and `apiKeyAuth`). Operations with `action.authRequired === true` automatically attach `security: [{ bearerAuth: [] }, { apiKeyAuth: [] }]`.
+- **Root Servers:** Declares root `servers: [{ url: '/', description: 'Default Server' }]`.
+
+### 8.5 Universal RFC 9457 Problem Details State Machine
+All failure modes—including schema validation errors (422), authentication failures (401/403), stream byte overruns (413), server exceptions (500), and unmapped routes (404 via `app.notFound()`)—emit standard `application/problem+json` envelopes. Internal stack traces are suppressed in production, exposing only actionable error details and correlation `requestId`.
+
+---
+
+## 9. Protocol Module B: Model Context Protocol (MCP) Architecture
+
+Shukoi’s `@shukoi/mcp` connects LLM agents directly to declarative actions over the official Model Context Protocol (MCP 2024-11-05 & Streamable HTTP specification).
+
+### 9.1 Stateless Per-Request Scoped Servers (ADR-002)
+The official `@modelcontextprotocol/sdk` maintains an internal mutable `this._transport` reference on its `Server` singleton, causing transport overwrite race conditions when concurrent HTTP clients connect. Shukoi solves this by:
+1. Compiling and deeply freezing the tool, resource, and prompt catalog once at application boot (`compileMcpCatalog`).
+2. Instantiating a lightweight, isolated `createScopedMcpServer` per incoming HTTP request or STDIO session.
+3. Guaranteeing `await scopedServer.close()` inside a deterministic `finally` block to cleanly abort active operations.
+
+### 9.2 Complete Native Support for Core MCP Primitives
+- **Tools (`tools/list`, `tools/call`):** Compiles TypeBox schemas into standard LLM tool declarations with behavioral annotations (`destructiveHint`, `idempotentHint`). Normalizes output to handle plain JSON objects, raw text strings, and multimodal content blocks (e.g. Base64 images).
+- **Resources (`resources/list`, `resources/templates/list`, `resources/read`):** Exposes contextual assets via static URIs (`resource://${name}`) or parameterized RFC 6570 URI templates (e.g. `cluster://{clusterId}/nodes/{nodeId}`). Template parameters are extracted via pre-compiled regular expressions and bound to action inputs.
+- **Prompts (`prompts/list`, `prompts/get`):** Pre-engineered prompt workflows. Argument schemas (`name`, `description`, `required`) are introspected directly from TypeBox input schemas, returning standardized MCP `messages: [{ role, content }]`.
+
+### 9.3 Streamable HTTP Transport (`@shukoi/mcp/http`)
+- **DNS-Rebinding Gate:** Validates incoming `Host` and `Origin` against security allowlists before processing JSON-RPC messages, rejecting unauthorized hosts with HTTP 403.
+- **Stateless Session Teardown:** Handles HTTP `DELETE /mcp` requests, returning HTTP 204 No Content for clean client session disconnection.
+- **Header Negotiation:** Seamlessly accepts both `application/json` and `text/event-stream`.
+- **Hono Co-Hosting:** Provides `mountMcpHttpRoutes(app, path, catalog, config)` to co-host REST API and MCP HTTP interfaces on the same port.
+
+### 9.4 Sterile STDIO Transport & Anti-Zombie Watchdog (`@shukoi/mcp/stdio`)
+- **Strict `stdout` Sterility:** Hijacks `console.log/info/warn/debug` to `process.stderr`, reserving File Descriptor 1 (`stdout`) strictly for newline-delimited JSON-RPC 2.0 frames (**ADR-005**).
+- **Pure Stdin Readline:** Configures `readline.createInterface` without specifying an output stream, ensuring readline internals never leak control characters to `stdout`.
+- **FIFO Outbound Serialization Queue:** Sequentially flushes frames via `enqueueFrameWrite`, awaiting kernel TCP socket drain backpressure and eliminating buffer interleaving between concurrent progress notifications and responses.
+- **Anti-Zombie Process Watchdog:** Actively listens for `process.stdin` pipe closure, `process.stdout` `EPIPE`, and POSIX signals, aborting all active controllers and exiting code 0 within 200 ms if the host IDE disconnects.

@@ -17,8 +17,16 @@ compatibility: TypeScript 5.5+, @sinclair/typebox, @shukoi/core
 
 1. **Define Input & Output Schemas**: Create TypeBox schemas in `src/actions/<domain>-<verb>.ts` with descriptive metadata on every property (used automatically by OpenAPI 3.1 and LLM tool schemas).
 2. **Configure Exposure**:
-   - Add `http: { method, path, successStatus }` to expose via `@shukoi/api`. Set `requireIdempotencyKey: true` for state-mutating `POST`/`PATCH` actions.
-   - Add `mcp: { enabled: true, entityType: 'tool' | 'resource' | 'prompt', annotations }` to expose via `@shukoi/mcp`.
+   - **REST API (`@shukoi/api`)**:
+     - `http: { method, path, successStatus, customContentType?, requireIdempotencyKey? }`.
+     - Query parameters in `action.input` are automatically projected into OpenAPI 3.1 for `GET` and `DELETE` routes.
+     - Parameter merging priority strictly guarantees $\text{Query} < \text{JSON Body} < \text{Path}$ (path variables `:id` can never be overridden).
+     - Multi-value query parameters (e.g. `?tags=a&tags=b`) map cleanly into `Type.Array()`.
+     - Non-JSON payloads (CSV, SVG, text) configure `customContentType: 'text/csv'`.
+   - **Model Context Protocol (`@shukoi/mcp`)**:
+     - **Tool:** `mcp: { enabled: true, entityType: 'tool', annotations?: { readOnlyHint?, destructiveHint?, idempotentHint?, openWorldHint? } }`.
+     - **Resource:** `mcp: { enabled: true, entityType: 'resource', resourceUriTemplate?: 'cluster://{id}/metrics', mimeType?: 'application/json' }` (defaults to `resource://${action.name}` if template is omitted).
+     - **Prompt:** `mcp: { enabled: true, entityType: 'prompt' }` (arguments schema and descriptions are automatically compiled from `action.input`).
 3. **Implement Pure Handler**:
    - Check `ctx.signal.aborted` or call `ctx.signal.throwIfAborted?.()` before expensive operations.
    - Throw `new DomainError(code, message, httpStatus)` for operational errors (automatically mapped to RFC 9457 `problem+json` on REST and `{ isError: true }` on MCP).
