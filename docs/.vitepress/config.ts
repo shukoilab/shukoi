@@ -8,7 +8,13 @@
  * @invariants Pure declarative configuration object; deterministic SSR serialization; Big-O O(1).
  */
 
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vitepress';
+
+const corePkg = JSON.parse(
+  readFileSync(new URL('../../packages/core/package.json', import.meta.url), 'utf-8'),
+);
+const activeVersion = `v${corePkg.version}`;
 
 const basePath = process.env.BASE_URL || '/shukoi/';
 
@@ -41,7 +47,7 @@ export default defineConfig({
       { text: 'Architecture', link: '/architecture/overview' },
       { text: 'API Reference', link: '/reference/api' },
       {
-        text: 'v1.0.2',
+        text: activeVersion,
         items: [
           { text: 'Changelog', link: 'https://github.com/shukoilab/shukoi/releases' },
           { text: 'NPM Registry', link: 'https://www.npmjs.com/package/@shukoi/core' },

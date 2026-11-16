@@ -22,6 +22,13 @@ describe('VitePress Documentation Site & GitHub Pages Integrity', () => {
 
     expect(spec.openapi).toBe('3.1.0');
     expect(spec.info).toBeDefined();
+
+    const corePkgRaw = await fs.readFile(
+      new URL('../packages/core/package.json', import.meta.url),
+      'utf-8',
+    );
+    const { version: coreVersion } = JSON.parse(corePkgRaw);
+    expect(spec.info.version).toBe(coreVersion);
     expect(spec.paths).toBeDefined();
     expect(spec.paths['/api/v1/payments']).toBeDefined();
     expect(spec.paths['/api/v1/users/{id}']).toBeDefined();

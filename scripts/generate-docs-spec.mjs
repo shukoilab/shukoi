@@ -241,11 +241,17 @@ export function createShowcaseActions() {
  * @invariants Atomic write; Big-O O(n) schema traversal.
  */
 export async function generateDocsSpec() {
+  const corePkgRaw = await fs.readFile(
+    new URL('../packages/core/package.json', import.meta.url),
+    'utf-8',
+  );
+  const { version: activeVersion } = JSON.parse(corePkgRaw);
+
   const actions = createShowcaseActions();
   const config = createDefaultConfig({
-    service: {
-      name: 'Shukoi Showcase API',
-      version: '1.0.2',
+    observability: {
+      serviceName: 'Shukoi Showcase API',
+      serviceVersion: activeVersion,
     },
     security: {
       allowedOrigins: ['*'],
