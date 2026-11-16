@@ -131,8 +131,26 @@ export function createMcpHttpHandler<TServices = unknown>(
       );
     }
 
+    if (req.method === 'DELETE') {
+      // In stateless mode, session termination is a clean no-op returning 204 No Content
+      return new Response(null, { status: 204 });
+    }
+
     if (req.method !== 'POST') {
       return new Response('Method Not Allowed', { status: 405 });
+    }
+
+    const acceptHeader = req.headers.get('accept');
+    if (
+      acceptHeader &&
+      !acceptHeader.includes('*/*') &&
+      !acceptHeader.includes('application/json') &&
+      !acceptHeader.includes('text/event-stream')
+    ) {
+      return new Response(
+        'Not Acceptable: client must accept application/json or text/event-stream',
+        { status: 406 },
+      );
     }
 
     const headers = extractHeaders(req);

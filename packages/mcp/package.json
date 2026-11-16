@@ -51,6 +51,9 @@
     "hono": "^4.7.0"
   },
   "peerDependenciesMeta": {
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
     "hono": {
       "optional": true
     }

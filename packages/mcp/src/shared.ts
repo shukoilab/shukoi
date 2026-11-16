@@ -64,6 +64,18 @@ export interface McpPromptDescriptor {
 }
 
 /**
+ * @purpose Parsed resource template route for dynamic resource matching.
+ * @rationale Pre-compiles regular expressions from URI templates to resolve dynamic parameters in O(t) time.
+ * @invariants Readonly pre-compiled route.
+ */
+export interface McpResourceTemplateRoute {
+  readonly action: CompiledAction;
+  readonly template: string;
+  readonly regex: RegExp;
+  readonly paramNames: readonly string[];
+}
+
+/**
  * @purpose Pre-compiled, immutable catalog aggregating all MCP entities.
  * @rationale Enables O(1) tool lookup and fast listing without iterating or recompiling action schemas at runtime.
  * @invariants Deeply frozen object collections.
@@ -74,6 +86,33 @@ export interface McpCatalog {
   readonly resourceTemplatesList: readonly Record<string, unknown>[];
   readonly promptsList: readonly McpPromptDescriptor[];
   readonly actionLookup: ReadonlyMap<string, CompiledAction>;
+  readonly resourceLookup: ReadonlyMap<string, CompiledAction>;
+  readonly resourceTemplateLookup: readonly McpResourceTemplateRoute[];
+}
+
+/**
+ * @purpose Compiles a parameterized URI template into a matching regular expression and parameter list.
+ * @rationale Converts RFC 6570 style URI templates into pre-compiled regex for fast runtime parameter extraction.
+ * @preconditions template is a non-empty string potentially containing {param} placeholders.
+ * @param template URI template string.
+ * @returns Object containing compiled regex and ordered parameter names.
+ * @throws Never throws.
+ * @invariants Big-O time complexity O(L) where L is template string length; pure function.
+ */
+export function compileUriTemplate(template: string): { regex: RegExp; paramNames: string[] } {
+  const paramNames: string[] = [];
+  const parts = template.split(/\{([a-zA-Z0-9_]+)\}/g);
+  let regexStr = '^';
+  for (let i = 0; i < parts.length; i++) {
+    if (i % 2 === 1) {
+      paramNames.push(parts[i] as string);
+      regexStr += '([^/]+)';
+    } else {
+      regexStr += (parts[i] as string).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+  }
+  regexStr += '$';
+  return { regex: new RegExp(regexStr), paramNames };
 }
 
 /**
@@ -91,6 +130,8 @@ export function compileMcpCatalog(actions: readonly CompiledAction[]): McpCatalo
   const resourceTemplates: Record<string, unknown>[] = [];
   const prompts: McpPromptDescriptor[] = [];
   const lookup = new Map<string, CompiledAction>();
+  const resourceLookup = new Map<string, CompiledAction>();
+  const resourceTemplateRoutes: McpResourceTemplateRoute[] = [];
 
   for (const action of actions) {
     if (!action.mcp?.enabled) {
@@ -104,7 +145,7 @@ export function compileMcpCatalog(actions: readonly CompiledAction[]): McpCatalo
         name: action.name,
         description: action.description,
         inputSchema: action.input,
-        annotations: action.mcp.annotations,
+        ...(action.mcp.annotations !== undefined ? { annotations: action.mcp.annotations } : {}),
       });
     } else if (action.mcp.entityType === 'resource') {
       if (action.mcp.resourceUriTemplate) {
@@ -112,20 +153,47 @@ export function compileMcpCatalog(actions: readonly CompiledAction[]): McpCatalo
           uriTemplate: action.mcp.resourceUriTemplate,
           name: action.name,
           description: action.description,
-          mimeType: action.mcp.mimeType,
+          ...(action.mcp.mimeType !== undefined ? { mimeType: action.mcp.mimeType } : {}),
+        });
+        const compiled = compileUriTemplate(action.mcp.resourceUriTemplate);
+        resourceTemplateRoutes.push({
+          action,
+          template: action.mcp.resourceUriTemplate,
+          regex: compiled.regex,
+          paramNames: Object.freeze(compiled.paramNames),
         });
       } else {
+        const uri = `resource://${action.name}`;
         resources.push({
-          uri: `resource://${action.name}`,
+          uri,
           name: action.name,
           description: action.description,
-          mimeType: action.mcp.mimeType,
+          ...(action.mcp.mimeType !== undefined ? { mimeType: action.mcp.mimeType } : {}),
         });
+        resourceLookup.set(uri, action);
       }
     } else if (action.mcp.entityType === 'prompt') {
+      const promptArgs: Array<{ name: string; description?: string; required?: boolean }> = [];
+      const inputSchema = action.input as Record<string, unknown> | undefined;
+      const rawProperties = inputSchema?.['properties'];
+      if (typeof rawProperties === 'object' && rawProperties !== null) {
+        const props = rawProperties as Record<string, Record<string, unknown>>;
+        const rawRequired = inputSchema?.['required'];
+        const requiredList = Array.isArray(rawRequired) ? (rawRequired as string[]) : [];
+        for (const [key, propSchema] of Object.entries(props)) {
+          const desc = propSchema['description'];
+          promptArgs.push({
+            name: key,
+            ...(typeof desc === 'string' ? { description: desc } : {}),
+            required: requiredList.includes(key),
+          });
+        }
+      }
+
       prompts.push({
         name: action.name,
         description: action.description,
+        ...(promptArgs.length > 0 ? { arguments: Object.freeze(promptArgs) } : {}),
       });
     }
   }
@@ -136,6 +204,8 @@ export function compileMcpCatalog(actions: readonly CompiledAction[]): McpCatalo
     resourceTemplatesList: Object.freeze(resourceTemplates),
     promptsList: Object.freeze(prompts),
     actionLookup: lookup,
+    resourceLookup,
+    resourceTemplateLookup: Object.freeze(resourceTemplateRoutes),
   });
 }
 
@@ -307,6 +377,238 @@ export function createScopedMcpServer<TServices = unknown>(
         };
       }
 
+      // Handle resources/read
+      if (msg.method === 'resources/read') {
+        const params = (msg.params ?? {}) as { uri?: string };
+        const uri = params.uri;
+        if (!uri || typeof uri !== 'string') {
+          return {
+            jsonrpc: '2.0',
+            id: msg.id ?? null,
+            error: { code: -32602, message: 'Invalid params: missing uri' },
+          };
+        }
+
+        let action = catalog.resourceLookup.get(uri);
+        const actionInput: Record<string, unknown> = {};
+
+        if (!action) {
+          for (const route of catalog.resourceTemplateLookup) {
+            const match = uri.match(route.regex);
+            if (match) {
+              action = route.action;
+              for (let i = 0; i < route.paramNames.length; i++) {
+                const paramName = route.paramNames[i];
+                const matchedVal = match[i + 1];
+                if (paramName && matchedVal !== undefined) {
+                  actionInput[paramName] = decodeURIComponent(matchedVal);
+                }
+              }
+              break;
+            }
+          }
+        }
+
+        if (!action) {
+          return {
+            jsonrpc: '2.0',
+            id: msg.id ?? null,
+            error: { code: -32602, message: `Resource "${uri}" not found` },
+          };
+        }
+
+        const callController = new AbortController();
+        if (msg.id !== undefined && msg.id !== null) {
+          activeControllers.set(msg.id, callController);
+        }
+
+        const combinedSignal = options.requestSignal
+          ? AbortSignal.any([options.requestSignal, callController.signal])
+          : callController.signal;
+
+        try {
+          const result = await executeAction(action, actionInput, {
+            config,
+            transport: 'mcp-http',
+            headers,
+            signal: combinedSignal,
+            platform: options.platform,
+            services: options.services,
+            idempotencyStore: options.idempotencyStore,
+            jwksClient: options.jwksClient,
+            staticApiKeys: options.staticApiKeys,
+          });
+
+          let contents: Array<{ uri: string; mimeType?: string; text?: string; blob?: string }>;
+          const resRecord =
+            typeof result === 'object' && result !== null
+              ? (result as Record<string, unknown>)
+              : undefined;
+
+          if (resRecord && Array.isArray(resRecord['contents'])) {
+            contents = resRecord['contents'] as Array<{
+              uri: string;
+              mimeType?: string;
+              text?: string;
+              blob?: string;
+            }>;
+          } else if (typeof result === 'string') {
+            contents = [
+              {
+                uri,
+                mimeType: action.mcp?.mimeType ?? 'text/plain',
+                text: result,
+              },
+            ];
+          } else {
+            contents = [
+              {
+                uri,
+                mimeType: action.mcp?.mimeType ?? 'application/json',
+                text: JSON.stringify(result),
+              },
+            ];
+          }
+
+          const responsePayload = { contents };
+          const serializedJson = JSON.stringify(responsePayload);
+          const byteLength = new TextEncoder().encode(serializedJson).byteLength;
+
+          if (byteLength > config.limits.maxMcpOutputBytes) {
+            throw new DomainError(
+              'PAYLOAD_TOO_LARGE',
+              `Resource output of ${byteLength} bytes exceeds maximum MCP payload limit of ${config.limits.maxMcpOutputBytes} bytes`,
+              413,
+            );
+          }
+
+          return {
+            jsonrpc: '2.0',
+            id: msg.id ?? null,
+            result: responsePayload,
+          };
+        } catch (callErr) {
+          const message = callErr instanceof Error ? callErr.message : String(callErr);
+          const statusCode = callErr instanceof DomainError ? callErr.statusCode : 500;
+          return {
+            jsonrpc: '2.0',
+            id: msg.id ?? null,
+            error: { code: -32000, message: `Error (${statusCode}): ${message}` },
+          };
+        } finally {
+          if (msg.id !== undefined && msg.id !== null) {
+            activeControllers.delete(msg.id);
+          }
+        }
+      }
+
+      // Handle prompts/get
+      if (msg.method === 'prompts/get') {
+        const params = (msg.params ?? {}) as { name?: string; arguments?: Record<string, unknown> };
+        const promptName = params.name;
+        if (!promptName || typeof promptName !== 'string') {
+          return {
+            jsonrpc: '2.0',
+            id: msg.id ?? null,
+            error: { code: -32602, message: 'Invalid params: missing prompt name' },
+          };
+        }
+
+        const action = catalog.actionLookup.get(promptName);
+        if (action?.mcp?.entityType !== 'prompt') {
+          return {
+            jsonrpc: '2.0',
+            id: msg.id ?? null,
+            error: { code: -32602, message: `Prompt "${promptName}" not found` },
+          };
+        }
+
+        const callController = new AbortController();
+        if (msg.id !== undefined && msg.id !== null) {
+          activeControllers.set(msg.id, callController);
+        }
+
+        const combinedSignal = options.requestSignal
+          ? AbortSignal.any([options.requestSignal, callController.signal])
+          : callController.signal;
+
+        try {
+          const rawArgs = params.arguments ?? {};
+          const result = await executeAction(action, rawArgs, {
+            config,
+            transport: 'mcp-http',
+            headers,
+            signal: combinedSignal,
+            platform: options.platform,
+            services: options.services,
+            idempotencyStore: options.idempotencyStore,
+            jwksClient: options.jwksClient,
+            staticApiKeys: options.staticApiKeys,
+          });
+
+          let messages: Array<{ role: string; content: { type: string; text: string } }>;
+          let description = action.description;
+          const resPromptRecord =
+            typeof result === 'object' && result !== null
+              ? (result as Record<string, unknown>)
+              : undefined;
+
+          if (resPromptRecord && Array.isArray(resPromptRecord['messages'])) {
+            messages = resPromptRecord['messages'] as Array<{
+              role: string;
+              content: { type: string; text: string };
+            }>;
+            if (typeof resPromptRecord['description'] === 'string') {
+              description = resPromptRecord['description'];
+            }
+          } else if (typeof result === 'string') {
+            messages = [
+              {
+                role: 'user',
+                content: { type: 'text', text: result },
+              },
+            ];
+          } else {
+            messages = [
+              {
+                role: 'user',
+                content: { type: 'text', text: JSON.stringify(result) },
+              },
+            ];
+          }
+
+          const responsePayload = { description, messages };
+          const serializedJson = JSON.stringify(responsePayload);
+          const byteLength = new TextEncoder().encode(serializedJson).byteLength;
+
+          if (byteLength > config.limits.maxMcpOutputBytes) {
+            throw new DomainError(
+              'PAYLOAD_TOO_LARGE',
+              `Prompt output of ${byteLength} bytes exceeds maximum MCP payload limit of ${config.limits.maxMcpOutputBytes} bytes`,
+              413,
+            );
+          }
+
+          return {
+            jsonrpc: '2.0',
+            id: msg.id ?? null,
+            result: responsePayload,
+          };
+        } catch (callErr) {
+          const message = callErr instanceof Error ? callErr.message : String(callErr);
+          const statusCode = callErr instanceof DomainError ? callErr.statusCode : 500;
+          return {
+            jsonrpc: '2.0',
+            id: msg.id ?? null,
+            error: { code: -32000, message: `Error (${statusCode}): ${message}` },
+          };
+        } finally {
+          if (msg.id !== undefined && msg.id !== null) {
+            activeControllers.delete(msg.id);
+          }
+        }
+      }
+
       // Handle tools/call
       if (msg.method === 'tools/call') {
         const params = (msg.params ?? {}) as { name?: string; arguments?: Record<string, unknown> };
@@ -360,7 +662,44 @@ export function createScopedMcpServer<TServices = unknown>(
             },
           });
 
-          const serializedJson = JSON.stringify(result);
+          let content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
+          let isError: boolean | undefined;
+          const resToolRecord =
+            typeof result === 'object' && result !== null
+              ? (result as Record<string, unknown>)
+              : undefined;
+
+          if (resToolRecord && Array.isArray(resToolRecord['content'])) {
+            content = resToolRecord['content'] as Array<{
+              type: string;
+              text?: string;
+              data?: string;
+              mimeType?: string;
+            }>;
+            if (typeof resToolRecord['isError'] === 'boolean') {
+              isError = resToolRecord['isError'];
+            }
+          } else if (typeof result === 'string') {
+            content = [
+              {
+                type: 'text',
+                text: result,
+              },
+            ];
+          } else {
+            content = [
+              {
+                type: 'text',
+                text: JSON.stringify(result),
+              },
+            ];
+          }
+
+          const responsePayload = {
+            content,
+            ...(isError !== undefined ? { isError } : {}),
+          };
+          const serializedJson = JSON.stringify(responsePayload);
           const byteLength = new TextEncoder().encode(serializedJson).byteLength;
 
           // Enforce maxMcpOutputBytes boundary
@@ -375,14 +714,7 @@ export function createScopedMcpServer<TServices = unknown>(
           return {
             jsonrpc: '2.0',
             id: msg.id ?? null,
-            result: {
-              content: [
-                {
-                  type: 'text',
-                  text: serializedJson,
-                },
-              ],
-            },
+            result: responsePayload,
           };
         } catch (callErr) {
           const message = callErr instanceof Error ? callErr.message : String(callErr);

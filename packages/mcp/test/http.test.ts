@@ -131,4 +131,59 @@ describe('MCP HTTP Transport & DNS-Rebinding Protection', () => {
     const responses = (await res.json()) as unknown[];
     expect(responses.length).toBe(2);
   });
+
+  it('handles DELETE /mcp returning 204 No Content for clean session termination', async () => {
+    const config = createDefaultConfig({
+      security: { allowedHosts: ['localhost'] },
+    });
+
+    const handler = createMcpHttpHandler(catalog, config);
+
+    const deleteReq = new Request('http://localhost/mcp', {
+      method: 'DELETE',
+      headers: {
+        Host: 'localhost',
+        Accept: 'application/json',
+      },
+    });
+
+    const res = await handler(deleteReq);
+    expect(res.status).toBe(204);
+    const text = await res.text();
+    expect(text).toBe('');
+  });
+
+  it('validates Accept header negotiation correctly', async () => {
+    const config = createDefaultConfig({
+      security: { allowedHosts: ['localhost'] },
+    });
+
+    const handler = createMcpHttpHandler(catalog, config);
+
+    // 1. Official Streamable HTTP Accept header format succeeds
+    const sseReq = new Request('http://localhost/mcp', {
+      method: 'POST',
+      headers: {
+        Host: 'localhost',
+        Accept: 'application/json, text/event-stream',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 10, method: 'ping' }),
+    });
+    const sseRes = await handler(sseReq);
+    expect(sseRes.status).toBe(200);
+
+    // 2. Unsupported format returns 406 Not Acceptable
+    const invalidAcceptReq = new Request('http://localhost/mcp', {
+      method: 'POST',
+      headers: {
+        Host: 'localhost',
+        Accept: 'text/html',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 11, method: 'ping' }),
+    });
+    const invalidRes = await handler(invalidAcceptReq);
+    expect(invalidRes.status).toBe(406);
+  });
 });

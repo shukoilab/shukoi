@@ -7,6 +7,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import {
+  enqueueFrameWrite,
   hijackConsoleToStderr,
   setupZombieWatchdog,
   writeFrameWithBackpressure,
@@ -38,6 +39,23 @@ describe('MCP STDIO Transport & Anti-Zombie Watchdog', () => {
     await writeFrameWithBackpressure('{"jsonrpc":"2.0","result":{}}');
 
     expect(stdoutSpy).toHaveBeenCalledWith('{"jsonrpc":"2.0","result":{}}\n');
+    stdoutSpy.mockRestore();
+  });
+
+  it('sequences concurrent frame writes via enqueueFrameWrite in strict FIFO order', async () => {
+    const writtenFrames: string[] = [];
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writtenFrames.push(String(chunk));
+      return true;
+    });
+
+    await Promise.all([
+      enqueueFrameWrite('frame-1'),
+      enqueueFrameWrite('frame-2'),
+      enqueueFrameWrite('frame-3'),
+    ]);
+
+    expect(writtenFrames).toEqual(['frame-1\n', 'frame-2\n', 'frame-3\n']);
     stdoutSpy.mockRestore();
   });
 

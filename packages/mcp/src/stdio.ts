@@ -64,6 +64,25 @@ export async function writeFrameWithBackpressure(frame: string): Promise<void> {
   }
 }
 
+let writeQueue: Promise<void> = Promise.resolve();
+
+/**
+ * @purpose Enqueues outbound frames sequentially to preserve strict FIFO ordering and backpressure.
+ * @rationale Multiple asynchronous operations (e.g. background notifications and tool responses) writing concurrently could interleave buffer writes or race on drain events.
+ * @preconditions frame is a JSON-serializable string without trailing newline.
+ * @param frame Text payload to write to stdout.
+ * @returns Promise resolving once this frame and all prior queued frames have flushed.
+ * @throws Never throws unhandled.
+ * @invariants Strict FIFO ordering; serialized Promise queue.
+ */
+export function enqueueFrameWrite(frame: string): Promise<void> {
+  writeQueue = writeQueue.then(
+    () => writeFrameWithBackpressure(frame),
+    () => writeFrameWithBackpressure(frame),
+  );
+  return writeQueue;
+}
+
 /**
  * @purpose Configures the anti-zombie process watchdog monitoring stdin, stdout, and POSIX signals.
  * @rationale If an IDE (such as VS Code, Cursor, or Claude Desktop) crashes or disconnects its STDIO pipe, the child process must detect EOF and exit code 0 within 200 ms instead of dangling indefinitely as a zombie.
@@ -190,7 +209,7 @@ export function startStdioServer<TServices = unknown>(
         method,
         params,
       };
-      await writeFrameWithBackpressure(JSON.stringify(notificationMsg));
+      await enqueueFrameWrite(JSON.stringify(notificationMsg));
     },
   };
 
@@ -198,7 +217,6 @@ export function startStdioServer<TServices = unknown>(
 
   const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout,
     terminal: false,
   });
 
@@ -212,7 +230,7 @@ export function startStdioServer<TServices = unknown>(
       const parsed = JSON.parse(trimmed) as JsonRpcMessage;
       const response = await scopedServer.handleJsonRpc(parsed);
       if (response !== null) {
-        await writeFrameWithBackpressure(JSON.stringify(response));
+        await enqueueFrameWrite(JSON.stringify(response));
       }
     } catch (parseErr) {
       const errResponse: JsonRpcMessage = {
@@ -223,7 +241,7 @@ export function startStdioServer<TServices = unknown>(
           message: `Parse error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`,
         },
       };
-      await writeFrameWithBackpressure(JSON.stringify(errResponse));
+      await enqueueFrameWrite(JSON.stringify(errResponse));
     }
   });
 
@@ -254,7 +272,6 @@ export function bridgeStdioToHttp(remoteUrl: string, config: ShukoiConfig): () =
 
   const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout,
     terminal: false,
   });
 
@@ -291,7 +308,7 @@ export function bridgeStdioToHttp(remoteUrl: string, config: ShukoiConfig): () =
 
       const responseText = await res.text();
       if (responseText.trim()) {
-        await writeFrameWithBackpressure(responseText.trim());
+        await enqueueFrameWrite(responseText.trim());
       }
     } catch (err) {
       const errResponse: JsonRpcMessage = {
@@ -302,7 +319,7 @@ export function bridgeStdioToHttp(remoteUrl: string, config: ShukoiConfig): () =
           message: `Bridge forwarding error: ${err instanceof Error ? err.message : String(err)}`,
         },
       };
-      await writeFrameWithBackpressure(JSON.stringify(errResponse));
+      await enqueueFrameWrite(JSON.stringify(errResponse));
     } finally {
       activeControllers.delete(abortController);
     }
