@@ -185,6 +185,16 @@ export async function scaffoldProject(
     }
   }
 
+  if (options.targets.includes('selfhost')) {
+    if (options.targets.length === 1) {
+      scripts['dev'] = 'node --watch src/entries/selfhost.ts';
+      scripts['start'] = 'node dist/entries/selfhost.js';
+    } else {
+      scripts['dev:selfhost'] = 'node --watch src/entries/selfhost.ts';
+      scripts['start:selfhost'] = 'node dist/entries/selfhost.js';
+    }
+  }
+
   if (options.includeLinter !== false) {
     devDependencies['@biomejs/biome'] = '^2.6.7';
     scripts['lint'] = 'biome check .';
@@ -341,16 +351,61 @@ describe('healthAction', () => {
   await writeFile('test/health.test.ts', healthTestCode);
 
   // 6. Target Entrypoints Generation
-  if (options.products.includes('api') && options.targets.includes('selfhost')) {
-    const selfhostCode = `import { createRestRouter } from '@shukoi/api';
+  if (options.targets.includes('selfhost')) {
+    const selfhostCode = options.products.includes('api')
+      ? `import { createRestRouter } from '@shukoi/api';
 import { createSelfHostServer } from '@shukoi/selfhost';
 import { healthAction } from '../actions/health.js';
 import { config } from '../config.js';
 
 const app = createRestRouter([healthAction], config);
 export const server = createSelfHostServer(app, config);
+`
+      : `import { compileMcpCatalog, createMcpHttpHandler } from '@shukoi/mcp/http';
+import { createSelfHostServer } from '@shukoi/selfhost';
+import { Hono } from 'hono';
+import { healthAction } from '../actions/health.js';
+import { config } from '../config.js';
+
+const app = new Hono();
+const catalog = compileMcpCatalog([healthAction]);
+const handler = createMcpHttpHandler(catalog, config);
+app.all('/mcp', async (c) => handler(c.req.raw, c.env));
+export const server = createSelfHostServer(app, config);
 `;
     await writeFile('src/entries/selfhost.ts', selfhostCode);
+
+    const dockerfile = `FROM node:22-alpine AS builder
+WORKDIR /app
+RUN npm install -g pnpm
+COPY package.json pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm run build
+
+FROM node:22-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+RUN npm install -g pnpm
+COPY --from=builder /app/package.json /app/pnpm-lock.yaml* ./
+COPY --from=builder /app/dist ./dist
+RUN pnpm install --prod --frozen-lockfile
+USER node
+EXPOSE 3000
+CMD ["node", "dist/entries/selfhost.js"]
+`;
+    await writeFile('Dockerfile', dockerfile);
+
+    const dockerignore = `node_modules
+dist
+.git
+.agent
+.env
+.env.*
+coverage
+*.log
+`;
+    await writeFile('.dockerignore', dockerignore);
   }
 
   if (options.targets.includes('cloudflare')) {
@@ -494,6 +549,10 @@ export const server = startStdioServer(catalog, config);
     ? `- **Build (Lambda):** \`${options.packageManager} run build:lambda\`\n- **Dev (Lambda / SAM):** \`${options.packageManager} run ${options.targets.length === 1 ? 'dev' : 'dev:lambda'}\`\n- **Deploy:** \`${options.packageManager} run ${options.targets.length === 1 ? 'deploy' : 'deploy:lambda'}\`\n`
     : '';
 
+  const selfhostCommands = options.targets.includes('selfhost')
+    ? `- **Dev (Self-Host):** \`${options.packageManager} run ${options.targets.length === 1 ? 'dev' : 'dev:selfhost'}\`\n- **Start:** \`${options.packageManager} run ${options.targets.length === 1 ? 'start' : 'start:selfhost'}\`\n- **Docker Build:** \`docker build -t ${options.projectName} .\`\n`
+    : '';
+
   // 7. AI Agent Context & Constitutional Files
   const appAgentsMd = `# ${options.projectName} Application Constitution (AGENTS.md)
 
@@ -501,7 +560,7 @@ export const server = startStdioServer(catalog, config);
 - **Build:** \`${options.packageManager} run build\`
 - **Test:** \`${options.packageManager} test\`
 - **Typecheck:** \`${options.packageManager} run typecheck\`
-${cfCommands}${lambdaCommands}${options.includeLinter !== false ? `- **Lint:** \`${options.packageManager} run lint\`\n- **Format:** \`${options.packageManager} run format\`` : ''}
+${cfCommands}${lambdaCommands}${selfhostCommands}${options.includeLinter !== false ? `- **Lint:** \`${options.packageManager} run lint\`\n- **Format:** \`${options.packageManager} run format\`` : ''}
 
 ## 2. Core Architectural Laws for Coding Agents
 1. **Zero-Hardcoding:** Read all environment variables through \`src/config.ts\`.

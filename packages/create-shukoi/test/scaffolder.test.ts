@@ -182,4 +182,62 @@ describe('create-shukoi Scaffolder', () => {
 
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
+
+  it('scaffolds complete Self-Host project with Dockerfile, .dockerignore, and dev/start scripts', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'shukoi-test-selfhost-'));
+    const projectName = 'selfhost-core-service';
+
+    const { projectDir, filesCreated } = await scaffoldProject({
+      projectName,
+      targetDir: tmpDir,
+      products: ['api'],
+      targets: ['selfhost'],
+      packageManager: 'pnpm',
+    });
+
+    // 1. Files created
+    expect(filesCreated).toContain('Dockerfile');
+    expect(filesCreated).toContain('.dockerignore');
+    expect(filesCreated).toContain('src/entries/selfhost.ts');
+
+    // 2. Dockerfile contents
+    const dockerfileRaw = await fs.readFile(path.join(projectDir, 'Dockerfile'), 'utf-8');
+    expect(dockerfileRaw).toContain('FROM node:22-alpine AS builder');
+    expect(dockerfileRaw).toContain('USER node');
+    expect(dockerfileRaw).toContain('EXPOSE 3000');
+    expect(dockerfileRaw).toContain('CMD ["node", "dist/entries/selfhost.js"]');
+
+    // 3. .dockerignore contents
+    const dockerignoreRaw = await fs.readFile(path.join(projectDir, '.dockerignore'), 'utf-8');
+    expect(dockerignoreRaw).toContain('node_modules');
+    expect(dockerignoreRaw).toContain('dist');
+
+    // 4. package.json scripts
+    const pkgRaw = await fs.readFile(path.join(projectDir, 'package.json'), 'utf-8');
+    const pkg = JSON.parse(pkgRaw);
+    expect(pkg.scripts['dev']).toBe('node --watch src/entries/selfhost.ts');
+    expect(pkg.scripts['start']).toBe('node dist/entries/selfhost.js');
+
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('scaffolds selfhost entrypoint when products contains only mcp-http', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'shukoi-test-selfhost-mcp-'));
+    const projectName = 'mcp-selfhost-service';
+
+    const { projectDir, filesCreated } = await scaffoldProject({
+      projectName,
+      targetDir: tmpDir,
+      products: ['mcp-http'],
+      targets: ['selfhost'],
+      packageManager: 'pnpm',
+    });
+
+    expect(filesCreated).toContain('src/entries/selfhost.ts');
+    const entryCode = await fs.readFile(path.join(projectDir, 'src/entries/selfhost.ts'), 'utf-8');
+    expect(entryCode).toContain('createMcpHttpHandler');
+    expect(entryCode).toContain('createSelfHostServer');
+
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
 });
