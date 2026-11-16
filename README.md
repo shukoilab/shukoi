@@ -4,6 +4,7 @@
 > A contract-first TypeScript micro-framework. Author business logic once in a single declarative action—automatically expose production-ready **REST APIs (OpenAPI 3.1)**, **MCP Streamable HTTP servers**, and **MCP STDIO tools** across **Cloudflare Workers**, **AWS Lambda**, and **Bun/Node.js**.
 
 [![CI Quality Gates](https://github.com/shukoilab/shukoi/actions/workflows/ci.yml/badge.svg)](https://github.com/shukoilab/shukoi/actions/workflows/ci.yml)
+[![Documentation](https://img.shields.io/badge/Docs-GitHub_Pages-blue.svg)](https://shukoilab.github.io/shukoi/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript: 5.7+](https://img.shields.io/badge/TypeScript-5.7+-blue.svg)](https://www.typescriptlang.org/)
 [![Linter: Biome](https://img.shields.io/badge/Linter-Biome-60a5fa.svg)](https://biomejs.dev/)

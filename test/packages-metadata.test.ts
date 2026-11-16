@@ -56,7 +56,7 @@ describe('Package License & NPM Metadata Integrity', () => {
       expect(pkgJson.repository.directory).toBe(`packages/${pkg}`);
 
       // 6. Homepage, bugs, and author
-      expect(pkgJson.homepage).toBe('https://github.com/shukoilab/shukoi#readme');
+      expect(pkgJson.homepage).toBe('https://shukoilab.github.io/shukoi/');
       expect(pkgJson.bugs).toBe('https://github.com/shukoilab/shukoi/issues');
       expect(pkgJson.author).toBe('shukoilab');
     }
@@ -81,7 +81,7 @@ describe('Package License & NPM Metadata Integrity', () => {
 
     expect(rootPkg.license).toBe('MIT');
     expect(rootPkg.author).toBe('shukoilab');
-    expect(rootPkg.homepage).toBe('https://github.com/shukoilab/shukoi#readme');
+    expect(rootPkg.homepage).toBe('https://shukoilab.github.io/shukoi/');
     expect(rootPkg.repository?.url).toBe('git+https://github.com/shukoilab/shukoi.git');
     expect(rootPkg.bugs).toBe('https://github.com/shukoilab/shukoi/issues');
 
