@@ -148,6 +148,8 @@ export async function scaffoldProject(
 
   if (options.targets.includes('lambda')) {
     dependencies['@shukoi/lambda'] = '^1.0.2';
+    devDependencies['@types/aws-lambda'] = '^8.10.147';
+    devDependencies['esbuild'] = '^0.25.0';
   }
 
   if (options.targets.includes('selfhost')) {
@@ -169,6 +171,18 @@ export async function scaffoldProject(
       scripts['deploy:cf'] = 'wrangler deploy';
     }
     scripts['cf-typegen'] = 'wrangler types env.d.ts';
+  }
+
+  if (options.targets.includes('lambda')) {
+    scripts['build:lambda'] =
+      'esbuild src/entries/lambda.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/lambda.mjs';
+    if (options.targets.length === 1) {
+      scripts['dev'] = 'sam local start-api';
+      scripts['deploy'] = 'sam deploy --guided';
+    } else {
+      scripts['dev:lambda'] = 'sam local start-api';
+      scripts['deploy:lambda'] = 'sam deploy --guided';
+    }
   }
 
   if (options.includeLinter !== false) {
@@ -410,6 +424,43 @@ app.all('/mcp', async (c) => mcpHandler(c.req.raw, c.env));
 export const handler = toLambdaHandler(app, { config });
 `;
     await writeFile('src/entries/lambda.ts', lambdaCode);
+
+    const samTemplate = `AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: ${options.projectName} - Shukoi AWS Lambda Service
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: nodejs22.x
+    Architectures:
+      - arm64
+
+Resources:
+  HttpApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: dist/lambda.mjs.handler
+      Events:
+        HttpApiCatchAll:
+          Type: HttpApi
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+        HttpApiRoot:
+          Type: HttpApi
+          Properties:
+            Path: /
+            Method: ANY
+
+Outputs:
+  HttpApiUrl:
+    Description: HTTP API Gateway endpoint URL
+    Value: !Sub "https://\${ServerlessHttpApi}.execute-api.\${AWS::Region}.amazonaws.com"
+`;
+    await writeFile('template.yaml', samTemplate);
   }
 
   if (options.products.includes('mcp-http')) {
@@ -439,6 +490,10 @@ export const server = startStdioServer(catalog, config);
     ? `- **Dev (Cloudflare):** \`${options.packageManager} run ${options.targets.length === 1 ? 'dev' : 'dev:cf'}\`\n- **Deploy:** \`${options.packageManager} run ${options.targets.length === 1 ? 'deploy' : 'deploy:cf'}\`\n- **Types:** \`${options.packageManager} run cf-typegen\`\n`
     : '';
 
+  const lambdaCommands = options.targets.includes('lambda')
+    ? `- **Build (Lambda):** \`${options.packageManager} run build:lambda\`\n- **Dev (Lambda / SAM):** \`${options.packageManager} run ${options.targets.length === 1 ? 'dev' : 'dev:lambda'}\`\n- **Deploy:** \`${options.packageManager} run ${options.targets.length === 1 ? 'deploy' : 'deploy:lambda'}\`\n`
+    : '';
+
   // 7. AI Agent Context & Constitutional Files
   const appAgentsMd = `# ${options.projectName} Application Constitution (AGENTS.md)
 
@@ -446,7 +501,7 @@ export const server = startStdioServer(catalog, config);
 - **Build:** \`${options.packageManager} run build\`
 - **Test:** \`${options.packageManager} test\`
 - **Typecheck:** \`${options.packageManager} run typecheck\`
-${cfCommands}${options.includeLinter !== false ? `- **Lint:** \`${options.packageManager} run lint\`\n- **Format:** \`${options.packageManager} run format\`` : ''}
+${cfCommands}${lambdaCommands}${options.includeLinter !== false ? `- **Lint:** \`${options.packageManager} run lint\`\n- **Format:** \`${options.packageManager} run format\`` : ''}
 
 ## 2. Core Architectural Laws for Coding Agents
 1. **Zero-Hardcoding:** Read all environment variables through \`src/config.ts\`.

@@ -147,4 +147,39 @@ describe('create-shukoi Scaffolder', () => {
 
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
+
+  it('scaffolds complete AWS Lambda project with template.yaml, esbuild, and dev scripts', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'shukoi-test-lambda-'));
+    const projectName = 'lambda-order-service';
+
+    const { projectDir, filesCreated } = await scaffoldProject({
+      projectName,
+      targetDir: tmpDir,
+      products: ['api'],
+      targets: ['lambda'],
+      packageManager: 'pnpm',
+    });
+
+    // 1. Files created
+    expect(filesCreated).toContain('template.yaml');
+    expect(filesCreated).toContain('src/entries/lambda.ts');
+
+    // 2. template.yaml contents
+    const samRaw = await fs.readFile(path.join(projectDir, 'template.yaml'), 'utf-8');
+    expect(samRaw).toContain('Transform: AWS::Serverless-2016-10-31');
+    expect(samRaw).toContain('Runtime: nodejs22.x');
+    expect(samRaw).toContain('Handler: dist/lambda.mjs.handler');
+    expect(samRaw).toContain('arm64');
+
+    // 3. package.json devDependencies and scripts
+    const pkgRaw = await fs.readFile(path.join(projectDir, 'package.json'), 'utf-8');
+    const pkg = JSON.parse(pkgRaw);
+    expect(pkg.devDependencies['@types/aws-lambda']).toBeDefined();
+    expect(pkg.devDependencies['esbuild']).toBeDefined();
+    expect(pkg.scripts['build:lambda']).toContain('esbuild src/entries/lambda.ts');
+    expect(pkg.scripts['dev']).toBe('sam local start-api');
+    expect(pkg.scripts['deploy']).toBe('sam deploy --guided');
+
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
 });
