@@ -116,6 +116,12 @@ export async function scaffoldProject(
     jose: '^5.9.6',
   };
 
+  const devDependencies: Record<string, string> = {
+    typescript: '^5.7.3',
+    vitest: '^3.0.5',
+    '@types/node': '^22.13.4',
+  };
+
   if (
     options.products.includes('api') ||
     options.targets.includes('cloudflare') ||
@@ -136,6 +142,8 @@ export async function scaffoldProject(
 
   if (options.targets.includes('cloudflare')) {
     dependencies['@shukoi/cloudflare'] = '^1.0.2';
+    devDependencies['wrangler'] = '^3.114.0';
+    devDependencies['@cloudflare/workers-types'] = '^4.20260200.0';
   }
 
   if (options.targets.includes('lambda')) {
@@ -152,11 +160,16 @@ export async function scaffoldProject(
     typecheck: 'tsc --noEmit',
   };
 
-  const devDependencies: Record<string, string> = {
-    typescript: '^5.7.3',
-    vitest: '^3.0.5',
-    '@types/node': '^22.13.4',
-  };
+  if (options.targets.includes('cloudflare')) {
+    if (options.targets.length === 1) {
+      scripts['dev'] = 'wrangler dev';
+      scripts['deploy'] = 'wrangler deploy';
+    } else {
+      scripts['dev:cf'] = 'wrangler dev';
+      scripts['deploy:cf'] = 'wrangler deploy';
+    }
+    scripts['cf-typegen'] = 'wrangler types env.d.ts';
+  }
 
   if (options.includeLinter !== false) {
     devDependencies['@biomejs/biome'] = '^2.6.7';
@@ -246,8 +259,9 @@ coverage/
       skipLibCheck: true,
       outDir: './dist',
       rootDir: './src',
+      ...(options.targets.includes('cloudflare') ? { types: ['@cloudflare/workers-types'] } : {}),
     },
-    include: ['src/**/*'],
+    include: options.targets.includes('cloudflare') ? ['src/**/*', 'env.d.ts'] : ['src/**/*'],
   };
   await writeFile('tsconfig.json', `${JSON.stringify(tsconfig, null, 2)}\n`);
 
@@ -348,6 +362,29 @@ app.all('/mcp', async (c) => handler(c.req.raw, c.env));
 export default toCloudflareWorker(app);
 `;
     await writeFile('src/entries/cloudflare.ts', cloudflareCode);
+
+    const wranglerConfig = `{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "${options.projectName}",
+  "main": "src/entries/cloudflare.ts",
+  "compatibility_date": "2026-11-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  }
+}
+`;
+    await writeFile('wrangler.jsonc', wranglerConfig);
+
+    const envDeclaration = `// Cloudflare Workers environment bindings interface.
+// Run \`${options.packageManager} run cf-typegen\` after configuring bindings in wrangler.jsonc.
+interface Env {
+  // KV?: KVNamespace;
+  // DB?: D1Database;
+  // BUCKET?: R2Bucket;
+}
+`;
+    await writeFile('env.d.ts', envDeclaration);
   }
 
   if (options.targets.includes('lambda')) {
@@ -398,6 +435,10 @@ export const server = startStdioServer(catalog, config);
     await writeFile('src/entries/mcp-stdio.ts', mcpStdioCode);
   }
 
+  const cfCommands = options.targets.includes('cloudflare')
+    ? `- **Dev (Cloudflare):** \`${options.packageManager} run ${options.targets.length === 1 ? 'dev' : 'dev:cf'}\`\n- **Deploy:** \`${options.packageManager} run ${options.targets.length === 1 ? 'deploy' : 'deploy:cf'}\`\n- **Types:** \`${options.packageManager} run cf-typegen\`\n`
+    : '';
+
   // 7. AI Agent Context & Constitutional Files
   const appAgentsMd = `# ${options.projectName} Application Constitution (AGENTS.md)
 
@@ -405,7 +446,7 @@ export const server = startStdioServer(catalog, config);
 - **Build:** \`${options.packageManager} run build\`
 - **Test:** \`${options.packageManager} test\`
 - **Typecheck:** \`${options.packageManager} run typecheck\`
-${options.includeLinter !== false ? `- **Lint:** \`${options.packageManager} run lint\`\n- **Format:** \`${options.packageManager} run format\`` : ''}
+${cfCommands}${options.includeLinter !== false ? `- **Lint:** \`${options.packageManager} run lint\`\n- **Format:** \`${options.packageManager} run format\`` : ''}
 
 ## 2. Core Architectural Laws for Coding Agents
 1. **Zero-Hardcoding:** Read all environment variables through \`src/config.ts\`.

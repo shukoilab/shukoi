@@ -193,12 +193,33 @@ export function createRestRouter<TServices = unknown>(
 
       const headers = extractHeaders(c.req.raw);
 
+      let executionCtx: { waitUntil?: (p: Promise<unknown>) => void } | undefined;
+      try {
+        executionCtx = (c as { executionCtx?: { waitUntil?: (p: Promise<unknown>) => void } })
+          .executionCtx;
+      } catch {
+        // Not executing in an environment with ExecutionContext
+      }
+
+      const platform = {
+        env: c.env,
+        executionCtx,
+        waitUntil: (promise: Promise<unknown>) => {
+          if (executionCtx && typeof executionCtx.waitUntil === 'function') {
+            executionCtx.waitUntil(promise);
+          } else {
+            promise.catch(() => {});
+          }
+        },
+        ...(typeof c.env === 'object' && c.env !== null ? c.env : {}),
+      };
+
       const result = await executeAction(action, mergedInput, {
         config,
         transport: 'rest',
         headers,
         signal: c.req.raw.signal,
-        platform: c.env,
+        platform,
         services: options?.services,
         idempotencyStore: options?.idempotencyStore,
         jwksClient: options?.jwksClient,

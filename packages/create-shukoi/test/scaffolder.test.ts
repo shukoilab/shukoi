@@ -105,4 +105,46 @@ describe('create-shukoi Scaffolder', () => {
 
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
+
+  it('scaffolds complete Cloudflare Workers project with wrangler.jsonc, env.d.ts, and dev scripts', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'shukoi-test-cf-'));
+    const projectName = 'cf-worker-service';
+
+    const { projectDir, filesCreated } = await scaffoldProject({
+      projectName,
+      targetDir: tmpDir,
+      products: ['api'],
+      targets: ['cloudflare'],
+      packageManager: 'pnpm',
+    });
+
+    // 1. Files created
+    expect(filesCreated).toContain('wrangler.jsonc');
+    expect(filesCreated).toContain('env.d.ts');
+    expect(filesCreated).toContain('src/entries/cloudflare.ts');
+
+    // 2. wrangler.jsonc contents
+    const wranglerRaw = await fs.readFile(path.join(projectDir, 'wrangler.jsonc'), 'utf-8');
+    const wranglerConfig = JSON.parse(wranglerRaw);
+    expect(wranglerConfig.name).toBe('cf-worker-service');
+    expect(wranglerConfig.main).toBe('src/entries/cloudflare.ts');
+    expect(wranglerConfig.compatibility_flags).toContain('nodejs_compat');
+
+    // 3. package.json devDependencies and scripts
+    const pkgRaw = await fs.readFile(path.join(projectDir, 'package.json'), 'utf-8');
+    const pkg = JSON.parse(pkgRaw);
+    expect(pkg.devDependencies['wrangler']).toBeDefined();
+    expect(pkg.devDependencies['@cloudflare/workers-types']).toBeDefined();
+    expect(pkg.scripts['dev']).toBe('wrangler dev');
+    expect(pkg.scripts['deploy']).toBe('wrangler deploy');
+    expect(pkg.scripts['cf-typegen']).toBe('wrangler types env.d.ts');
+
+    // 4. tsconfig.json types
+    const tsconfigRaw = await fs.readFile(path.join(projectDir, 'tsconfig.json'), 'utf-8');
+    const tsconfig = JSON.parse(tsconfigRaw);
+    expect(tsconfig.compilerOptions.types).toContain('@cloudflare/workers-types');
+    expect(tsconfig.include).toContain('env.d.ts');
+
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
 });
