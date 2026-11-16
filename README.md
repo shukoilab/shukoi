@@ -54,9 +54,9 @@ Shukoi automatically compiles and mounts your action across three production out
    └───────────┼─────────────────────────────────────┴───────────┘
                ▼
      3 Deployment Runtime Targets
-       • Cloudflare Workers (@shukoi/cloudflare: V8 Isolates)
-       • AWS Lambda (@shukoi/lambda: Node.js 22+ ESM)
-       • Self-Host (@shukoi/selfhost: Bun 1.2+ / Node.js 22+ / Docker)
+       • Cloudflare Workers (@shukoi/cloudflare: V8 Isolates, waitUntil, D1/KV mocks)
+       • AWS Lambda (@shukoi/lambda: Node.js 22+ ESM, dynamic deadline, cookies, mocks)
+       • Self-Host (@shukoi/selfhost: Bun 1.2+ / Node 22+ / Docker, OOM 413, probes)
 ```
 
 ---
@@ -190,9 +190,9 @@ Every scaffolded project includes:
 | **`@shukoi/core`** | Action Engine, Adaptive Validator, Auth, Sterile Logger, Testing Harness | **Forbidden** (Pure Web Standard) | All Runtimes |
 | **`@shukoi/api`** | Hono REST Router, Stream-Bounded Reader, OpenAPI 3.1.0 Generator | **Forbidden** (Pure Web Standard) | All Runtimes |
 | **`@shukoi/mcp`** | Streamable HTTP (`./http`) & Sterile STDIO (`./stdio`) MCP Transports | Only in `./stdio` | Edge & Node/Bun |
-| **`@shukoi/cloudflare`**| Cloudflare Workers V8 Isolate Adapter with `executionCtx.waitUntil` | **Forbidden** (Pure Web Standard) | Cloudflare Workers |
-| **`@shukoi/lambda`** | AWS Lambda Adapter with dynamic execution deadline subtraction | Permitted | AWS Lambda |
-| **`@shukoi/selfhost`** | Bun/Node Server with Graceful Drain State Machine & `/healthz` probes | Permitted | Bun 1.2+ / Node 22+ |
+| **`@shukoi/cloudflare`**| Cloudflare Workers V8 Isolate Adapter (`getCloudflareContext`, `waitUntil`, `./testing` mocks) | **Forbidden** (Pure Web Standard) | Cloudflare Workers |
+| **`@shukoi/lambda`** | AWS Lambda Adapter with dynamic deadline subtraction (`getLambdaContext`, cookies, `./testing` mocks) | Permitted | AWS Lambda |
+| **`@shukoi/selfhost`** | Bun/Node Server with Graceful Drain, OOM 413 defense (`getSelfHostContext`, probes, `./testing` mocks) | Permitted | Bun 1.2+ / Node 22+ |
 | **`create-shukoi`** | Interactive Clack & CI automation project scaffolder CLI | Permitted | Node 22+ / Bun |
 
 ---

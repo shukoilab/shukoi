@@ -125,3 +125,40 @@ Every action receives a composite signal constructed via `AbortSignal.any`:
 | `INTERNAL_SERVER_ERROR` | 500 | `application/problem+json` (`status: 500`) | `{ isError: true, content: ["Error (500): ..."] }` |
 | `SERVICE_UNAVAILABLE` | 503 | `application/problem+json` (`status: 503`) | `{ isError: true, content: ["Error (503): ..."] }` |
 | `GATEWAY_TIMEOUT` | 504 | `application/problem+json` (`status: 504`) | `{ isError: true, content: ["Error (504): ..."] }` |
+
+---
+
+## 7. Runtime Adapters & Edge-to-Cloud Deployment Architecture
+
+Shukoi applications decouple business logic completely from server infrastructure. Actions interact solely with strongly typed inputs, outputs, and the platform-agnostic `ActionExecutionContext`. Runtime adapters bridge incoming gateway events into Web-standard `Request` objects, inject runtime bindings, enforce cancellation deadlines, and serialize responses back to platform proxy formats.
+
+### 7.1 Cloudflare Workers Adapter (`@shukoi/cloudflare`)
+- **V8 Isolate Security Boundary:** Contains strictly zero `node:*` imports. Compatible with Cloudflare Workers' strict edge isolates where Node.js built-ins and dynamic `new Function()` JIT compilation are restricted.
+- **Typed Platform Context:** Exposes `getCloudflareContext<TEnv>(ctx)` returning `{ env, executionCtx, waitUntil }`. Throws `DomainError('INTERNAL_SERVER_ERROR', ...)` if invoked outside a Cloudflare isolate.
+- **Asynchronous Lifecycle Preservation:** Preserves `executionCtx.waitUntil(promise)` to enable post-response asynchronous processing (e.g. telemetry flushing, cache population) without keeping clients waiting.
+- **In-Memory Testing Doubles (`@shukoi/cloudflare/testing`):** Provides zero-dependency in-memory doubles `createMockKv(seed?)` and `createMockD1(options?)` backed by native `Map` instances, allowing actions interacting with KV and D1 to be unit tested in Vitest in sub-millisecond execution times without Miniflare or Docker.
+- **Tooling Integration:** Turnkey scaffolding generates `wrangler.jsonc` (with `nodejs_compat` flag and observability enabled), `env.d.ts`, and `cf-typegen` commands.
+
+### 7.2 AWS Lambda Adapter (`@shukoi/lambda`)
+- **Universal Gateway Event Normalization:** Seamlessly translates events from API Gateway v1 (REST API), API Gateway v2 (HTTP API), Application Load Balancers (ALB), and Lambda Function URLs into Web-standard `Request` objects.
+- **Dynamic Deadline Subtraction:** Enforces container freeze protection by monitoring execution time countdown via `context.getRemainingTimeInMillis()`:
+  $$\text{effectiveTimeoutMs} = \min(\text{defaultTimeoutMs}, \text{context.getRemainingTimeInMillis()} - \text{config.limits.lambdaDeadlineBufferMs})$$
+  If remaining time minus buffer is $\le 0$, immediately returns HTTP 504 Gateway Timeout in RFC 9457 `application/problem+json` without starting database transactions.
+- **Container Freeze Safety:** Request signal aborts at `effectiveTimeoutMs`, ensuring in-flight database transactions roll back cleanly before AWS Firecracker microVM execution freeze.
+- **Cookie Normalization:** Reads incoming `event.cookies: string[]` in API Gateway v2 into the standard `Cookie` request header. On egress, extracts cookies via `res.headers.getSetCookie()` and sets `result.cookies: string[]` (v2) and `result.multiValueHeaders['set-cookie']` (v1/ALB) while deleting `set-cookie` from single headers to prevent comma-concatenation bugs.
+- **Automatic Binary Response Encoding:** Evaluates response Content-Type using `defaultIsContentTypeBinary`. If binary (`image/*`, `application/pdf`, `application/octet-stream`, compressed buffers), converts `arrayBuffer()` to Base64 and sets `isBase64Encoded: true`.
+- **BasePath & Stage Prefix Stripping:** Automatically removes `options.basePath` and API Gateway v1 stage prefixes (`event.requestContext.stage`) from URL pathnames, preventing 404 routing errors.
+- **In-Memory Testing Doubles (`@shukoi/lambda/testing`):** Provides `createMockLambdaContext`, `createMockApiGatewayV2Event`, and `createMockApiGatewayV1Event` for instantaneous unit testing without SAM CLI or Docker.
+
+### 7.3 Self-Host Server Adapter (`@shukoi/selfhost`)
+- **Dual Runtime Server Daemon:** Operates on long-running servers using Node.js 22+ LTS or Bun 1.2+.
+- **Stream-Level Bounded Ingress (OOM Defense):** Enforces `config.limits.maxBodyBytes` by consuming incoming request body chunks through an accumulating byte counter. Rejects oversized requests immediately with RFC 9457 HTTP 413 Problem Details (`PAYLOAD_TOO_LARGE`) and destroys the stream, bounding memory overhead to a single chunk ($O(1)$ heap overhead) and eliminating OOM DoS attack vectors.
+- **Typed Platform Context:** Exposes `getSelfHostContext(ctx)` returning `{ remoteAddress, remotePort, incoming, outgoing, serverState }`.
+- **Full Egress Cookie Preservation:** Extracts cookies via `(webResponse.headers as any).getSetCookie()` and passes an array to `res.setHeader('set-cookie', cookies)`, preserving multiple distinct cookies without browser-breaking comma merging.
+- **Socket Backpressure Handling:** Observes `res.write(value)` return values during response streaming; if false, halts stream reading until the TCP socket emits the `'drain'` event, preventing socket buffer bloat on slow client connections.
+- **Dynamic Kubernetes Container Probes:**
+  - Liveness (`options.livenessPath`, default `/healthz/live`): Returns HTTP 200 while process daemon is active.
+  - Readiness (`options.readinessPath`, default `/healthz/ready`): Returns HTTP 200 when `HEALTHY` and optional `isReady` hook passes. Evaluates `options.isReady?: () => Promise<boolean> | boolean` (e.g. database pool ping); returns HTTP 503 (`unhealthy`) when unready.
+- **Deterministic Graceful Drain State Machine:** Traps POSIX `SIGTERM` and `SIGINT` signals. Transitions state `STARTING` $\rightarrow$ `HEALTHY` $\rightarrow$ `DRAINING` $\rightarrow$ `TERMINATED`. Rejects new ingress with 503, drains active in-flight requests up to `shutdownGracePeriodMs`, destroys keep-alive sockets, runs `onShutdown()` teardown hooks, and exits code 0.
+- **In-Memory Testing Doubles (`@shukoi/selfhost/testing`):** Exports `createMockSelfHostContext` for testing client IP, port, and server state in Vitest without binding live OS network sockets.
+- **Container Hardening:** Turnkey scaffolding generates a multi-stage `Dockerfile` (`node:22-alpine`, non-root user `USER node`, frozen lockfile) and `.dockerignore`.

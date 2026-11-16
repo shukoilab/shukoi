@@ -174,6 +174,14 @@ Extracts strongly-typed self-host platform container (`remoteAddress`, `remotePo
 
 ---
 
+## Related Documentation & Architecture
+
+- **System Architecture:** [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) (Deep dive into graceful drain state machines and OOM defense).
+- **Deployment Skill:** [skills/shukoi-deploy-target](../../skills/shukoi-deploy-target/SKILL.md) (Step-by-step deployment and operational guidance).
+- **Runtime Comparison Matrix:** [Runtime Matrix](../../skills/shukoi-deploy-target/references/runtime-matrix.md) (Capabilities across Cloudflare, Lambda, and Self-Host).
+
+---
+
 ## License
 
 MIT © [Shukoi Contributors](https://github.com/shukoilab/shukoi)

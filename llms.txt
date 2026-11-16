@@ -23,7 +23,7 @@
 - [@shukoi/core](packages/core/AGENTS.md): Action engine, adaptive validator, single-flight auth, sterile logger, and testing harness.
 - [@shukoi/api](packages/api/AGENTS.md): Hono REST router, stream-bounded reader, OpenAPI 3.1 generator, and RFC 9457 Problem Details.
 - [@shukoi/mcp](packages/mcp/AGENTS.md): Streamable HTTP (DNS-rebinding protected) and STDIO (backpressure drain) MCP servers.
-- [@shukoi/cloudflare](packages/cloudflare/AGENTS.md): Cloudflare Workers V8 Isolate adapter with waitUntil integration.
-- [@shukoi/lambda](packages/lambda/AGENTS.md): AWS Lambda adapter with dynamic deadline calculation.
-- [@shukoi/selfhost](packages/selfhost/AGENTS.md): Bun and Node server with graceful drain state machine and /healthz probes.
+- [@shukoi/cloudflare](packages/cloudflare/AGENTS.md): Cloudflare Workers V8 Isolate adapter with getCloudflareContext, waitUntil, and in-memory D1/KV mocks (./testing).
+- [@shukoi/lambda](packages/lambda/AGENTS.md): AWS Lambda adapter with getLambdaContext, dynamic deadline calculation, cookies, binary Base64, and in-memory event mocks (./testing).
+- [@shukoi/selfhost](packages/selfhost/AGENTS.md): Bun and Node server with getSelfHostContext, OOM 413 defense, graceful drain, /healthz probes, and in-memory mocks (./testing).
 - [create-shukoi](packages/create-shukoi/AGENTS.md): Interactive and CI project scaffolder CLI.

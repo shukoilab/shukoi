@@ -98,9 +98,9 @@ Starts local STDIO MCP server with console hijacking to stderr and drain backpre
 
 ### 3.4 Runtime Adapters
 
-- `@shukoi/cloudflare`: `toCloudflareWorker(app)` returning `{ fetch(request, env, executionCtx) }`.
-- `@shukoi/lambda`: `toLambdaHandler(app, options)` calculating dynamic deadline minus `lambdaDeadlineBufferMs`.
-- `@shukoi/selfhost`: `createSelfHostServer(app, config, options)` with `/healthz/live`, `/healthz/ready`, and graceful drain state machine.
+- `@shukoi/cloudflare`: `toCloudflareWorker(app)` returning `{ fetch(request, env, executionCtx) }`. Context extraction via `getCloudflareContext<TEnv>(ctx)` (`env`, `waitUntil`). Testing doubles via `@shukoi/cloudflare/testing` (`createMockKv`, `createMockD1`).
+- `@shukoi/lambda`: `toLambdaHandler(app, options)` calculating dynamic deadline minus `lambdaDeadlineBufferMs`. API Gateway v2 cookie normalization (`event.cookies` / `result.cookies`), auto Base64 binary encoding (`defaultIsContentTypeBinary`), and context extraction via `getLambdaContext(ctx)`. Testing doubles via `@shukoi/lambda/testing` (`createMockLambdaContext`, `createMockApiGatewayV2Event`, `createMockApiGatewayV1Event`).
+- `@shukoi/selfhost`: `createSelfHostServer(app, config, options)` with `/healthz/live`, `/healthz/ready` (dynamic `isReady` hook), stream-bounded body limits (HTTP 413 OOM defense), socket backpressure (`drain`), and context extraction via `getSelfHostContext(ctx)` (`remoteAddress`, `remotePort`, `serverState`). Testing doubles via `@shukoi/selfhost/testing` (`createMockSelfHostContext`).
 
 ---
 

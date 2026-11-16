@@ -115,4 +115,41 @@ describe('AI Context & Documentation Architecture', () => {
       }
     }
   });
+
+  it('validates shukoi-deploy-target skill and runtime-matrix completeness', async () => {
+    const deploySkillPath = path.resolve('skills', 'shukoi-deploy-target', 'SKILL.md');
+    const deploySkillContent = await fs.readFile(deploySkillPath, 'utf-8');
+
+    expect(deploySkillContent).toContain('@shukoi/cloudflare');
+    expect(deploySkillContent).toContain('@shukoi/lambda');
+    expect(deploySkillContent).toContain('@shukoi/selfhost');
+    expect(deploySkillContent).toContain('getCloudflareContext');
+    expect(deploySkillContent).toContain('getLambdaContext');
+    expect(deploySkillContent).toContain('getSelfHostContext');
+    expect(deploySkillContent).toContain('@shukoi/cloudflare/testing');
+    expect(deploySkillContent).toContain('@shukoi/lambda/testing');
+    expect(deploySkillContent).toContain('@shukoi/selfhost/testing');
+
+    const matrixPath = path.resolve(
+      'skills',
+      'shukoi-deploy-target',
+      'references',
+      'runtime-matrix.md',
+    );
+    const matrixContent = await fs.readFile(matrixPath, 'utf-8');
+    expect(matrixContent).toContain('Cloudflare Workers');
+    expect(matrixContent).toContain('AWS Lambda');
+    expect(matrixContent).toContain('Self-Host Server');
+    expect(matrixContent).toContain('Ingress Cookie Parsing');
+    expect(matrixContent).toContain('Egress Cookie Preservation');
+    expect(matrixContent).toContain('Binary Response Handling');
+    expect(matrixContent).toContain('In-Memory Testing Subpath');
+
+    const archPath = path.resolve('docs', 'ARCHITECTURE.md');
+    const archContent = await fs.readFile(archPath, 'utf-8');
+    expect(archContent).toContain('## 7. Runtime Adapters & Edge-to-Cloud Deployment Architecture');
+    expect(archContent).toContain('7.1 Cloudflare Workers Adapter');
+    expect(archContent).toContain('7.2 AWS Lambda Adapter');
+    expect(archContent).toContain('7.3 Self-Host Server Adapter');
+  });
 });

@@ -23,7 +23,23 @@ compatibility: TypeScript 5.5+, @sinclair/typebox, @shukoi/core
    - Check `ctx.signal.aborted` or call `ctx.signal.throwIfAborted?.()` before expensive operations.
    - Throw `new DomainError(code, message, httpStatus)` for operational errors (automatically mapped to RFC 9457 `problem+json` on REST and `{ isError: true }` on MCP).
    - Register deterministic resource teardowns via `ctx.onFinally(() => cleanup())`.
-4. **Register & Verify**: Export the action in `src/actions/index.ts` and author a tri-transport parity test (`QG-01`) in `test/actions/<domain>-<verb>.test.ts`.
+4. **Accessing Platform-Specific Resources Cleanly**:
+   - To access Cloudflare bindings (D1, KV, R2) and post-response tasks without manual casting:
+     ```typescript
+     import { getCloudflareContext } from '@shukoi/cloudflare';
+     const { env, waitUntil } = getCloudflareContext<MyEnv>(ctx);
+     ```
+   - To access AWS Lambda metadata (AWS Request ID, remaining time, function ARN):
+     ```typescript
+     import { getLambdaContext } from '@shukoi/lambda';
+     const { context, getRemainingTimeInMillis } = getLambdaContext(ctx);
+     ```
+   - To access self-hosted container metadata (client IP, port, server health state):
+     ```typescript
+     import { getSelfHostContext } from '@shukoi/selfhost';
+     const { remoteAddress, serverState } = getSelfHostContext(ctx);
+     ```
+5. **Register & Verify**: Export the action in `src/actions/index.ts` and author a tri-transport parity test (`QG-01`) in `test/actions/<domain>-<verb>.test.ts`.
 
 For the complete list of `DomainError` codes and status mappings, read [references/error-codes.md](references/error-codes.md).
 To copy a pre-configured template, read [assets/action.template.ts](assets/action.template.ts).
