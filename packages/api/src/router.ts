@@ -33,7 +33,7 @@ export interface RestRouterOptions<TServices = unknown> {
 
 /**
  * @purpose Coerces string-based query or path parameter values into primitives based on value appearance.
- * @rationale HTTP query strings and path segments are inherently text strings; numeric and boolean schema fields require safe coercion.
+ * @rationale HTTP query strings and path segments are inherently text strings; numeric and boolean schema fields require safe coercion without wiping leading zeros on string identifiers.
  * @param raw String value from query parameter or path segment.
  * @returns Coerced number, boolean, or original string.
  * @throws Never throws.
@@ -46,13 +46,19 @@ export function coercePrimitiveParam(raw: string): unknown {
   if (raw === 'false') {
     return false;
   }
-  if (/^-?\d+$/.test(raw)) {
+  // Leading zeros on numeric strings (e.g. "01234", "007"): preserve as string
+  if (/^0\d+$/.test(raw)) {
+    return raw;
+  }
+  // Clean integer: 0 or non-zero leading integer
+  if (/^-?(0|[1-9]\d*)$/.test(raw)) {
     const num = Number.parseInt(raw, 10);
     if (!Number.isNaN(num) && Number.isSafeInteger(num)) {
       return num;
     }
   }
-  if (/^-?\d+\.\d+$/.test(raw)) {
+  // Decimal float
+  if (/^-?(0|[1-9]\d*)\.\d+$/.test(raw)) {
     const num = Number.parseFloat(raw);
     if (!Number.isNaN(num)) {
       return num;
@@ -146,13 +152,32 @@ export function createRestRouter<TServices = unknown>(
     });
   });
 
-  // 3. OpenAPI 3.1.0 Specification Route
+  // 3. RFC 9457 Route Not Found Handler (404)
+  app.notFound((c: Context) => {
+    const correlationHeader = config.observability.correlationIdHeader.toLowerCase();
+    const requestId =
+      c.req.header(correlationHeader) ??
+      c.req.header(config.observability.correlationIdHeader) ??
+      crypto.randomUUID();
+
+    const notFoundError = new DomainError(
+      'NOT_FOUND',
+      `Route "${c.req.method} ${c.req.path}" not found`,
+      404,
+    );
+    const problem = notFoundError.toProblemDetails(requestId, c.req.path);
+    return c.json(problem, 404, {
+      'Content-Type': 'application/problem+json',
+    });
+  });
+
+  // 4. OpenAPI 3.1.0 Specification Route
   const openApiSpec = generateOpenApiSpec(actions, config);
   app.get(openApiPath, (c) => {
     return c.json(openApiSpec, 200);
   });
 
-  // 4. Mount Actions as REST Routes
+  // 5. Mount Actions as REST Routes
   for (const action of actions) {
     if (!action.http) {
       continue;
@@ -161,11 +186,25 @@ export function createRestRouter<TServices = unknown>(
     const { method, path, successStatus } = action.http;
 
     app.on(method, path, async (c) => {
-      // Step A: Parse query parameters and coerce primitives
+      // Step A: Parse query parameters (supporting both single and multi-value arrays)
+      const rawQueries = typeof c.req.queries === 'function' ? c.req.queries() : undefined;
       const rawQuery = c.req.query();
       const queryParams: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(rawQuery)) {
-        queryParams[k] = coercePrimitiveParam(v);
+
+      if (rawQueries) {
+        for (const [k, vList] of Object.entries(rawQueries)) {
+          const cleanKey = k.endsWith('[]') ? k.slice(0, -2) : k;
+          if (Array.isArray(vList) && vList.length > 1) {
+            queryParams[cleanKey] = vList.map((item) => coercePrimitiveParam(item));
+          } else if (Array.isArray(vList) && vList.length === 1 && vList[0] !== undefined) {
+            queryParams[cleanKey] = coercePrimitiveParam(vList[0]);
+          }
+        }
+      } else {
+        for (const [k, v] of Object.entries(rawQuery)) {
+          const cleanKey = k.endsWith('[]') ? k.slice(0, -2) : k;
+          queryParams[cleanKey] = coercePrimitiveParam(v);
+        }
       }
 
       // Step B: Parse request body (stream bounded)
@@ -214,6 +253,19 @@ export function createRestRouter<TServices = unknown>(
         ...(typeof c.env === 'object' && c.env !== null ? c.env : {}),
       };
 
+      // Detect if this execution is an idempotent replay
+      const idempotencyHeaderName = (
+        action.http?.idempotencyHeaderName ?? 'idempotency-key'
+      ).toLowerCase();
+      const idempotencyKey = headers[idempotencyHeaderName] ?? headers['idempotency-key'];
+      let isReplay = false;
+      if (action.http?.requireIdempotencyKey && idempotencyKey && options?.idempotencyStore?.get) {
+        const existing = await options.idempotencyStore.get(action.name, idempotencyKey);
+        if (existing && existing.status === 'COMPLETED') {
+          isReplay = true;
+        }
+      }
+
       const result = await executeAction(action, mergedInput, {
         config,
         transport: 'rest',
@@ -226,9 +278,20 @@ export function createRestRouter<TServices = unknown>(
         staticApiKeys: options?.staticApiKeys,
       });
 
+      if (isReplay) {
+        c.header('Idempotent-Replayed', 'true');
+      }
+
       const statusCode = successStatus ?? 200;
       if (statusCode === 204) {
         return c.body(null, 204);
+      }
+
+      const customContentType = action.http?.customContentType;
+      if (customContentType && customContentType !== 'application/json') {
+        return c.body(result as string | ArrayBuffer, statusCode as ContentfulStatusCode, {
+          'Content-Type': customContentType,
+        });
       }
 
       return c.json(result, statusCode as ContentfulStatusCode);

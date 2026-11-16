@@ -33,6 +33,7 @@ export interface IdempotencyStore {
   ): Promise<{ acquired: boolean; record?: IdempotencyRecord }>;
   complete(actionName: string, key: string, payload: unknown, ttlMs: number): Promise<void>;
   release(actionName: string, key: string): Promise<void>;
+  get?(actionName: string, key: string): Promise<IdempotencyRecord | undefined>;
 }
 
 /**
@@ -147,6 +148,29 @@ export class InMemoryIdempotencyStore implements IdempotencyStore {
   public async release(actionName: string, key: string): Promise<void> {
     const composite = this.compositeKey(actionName, key);
     this.map.delete(composite);
+  }
+
+  /**
+   * @purpose Retrieves an existing idempotency record by action name and key without modifying state.
+   * @rationale Enables inspect-only queries (such as checking whether a request is a replayed idempotency cache hit) before or outside lock acquisition.
+   * @preconditions actionName and key must be non-empty strings.
+   * @param actionName Qualified action identifier.
+   * @param key Client-provided unique idempotency key.
+   * @returns Promise resolving to the active record, or undefined if absent or expired.
+   * @throws Never throws.
+   * @invariants Big-O time complexity O(1); non-mutating query.
+   */
+  public async get(actionName: string, key: string): Promise<IdempotencyRecord | undefined> {
+    const composite = this.compositeKey(actionName, key);
+    const record = this.map.get(composite);
+    if (!record) {
+      return undefined;
+    }
+    if (Date.now() > record.expiresAt) {
+      this.map.delete(composite);
+      return undefined;
+    }
+    return record;
   }
 
   /**

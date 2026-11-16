@@ -67,6 +67,31 @@ export function generateOpenApiSpec(
       description: `Path parameter: ${p}`,
     }));
 
+    // Auto-extract query parameters for GET and DELETE operations from input schema
+    if (action.http.method === 'GET' || action.http.method === 'DELETE') {
+      const inputObj = action.input as Record<string, unknown> | undefined;
+      const rawProps = inputObj?.['properties'];
+      if (typeof rawProps === 'object' && rawProps !== null) {
+        const props = rawProps as Record<string, Record<string, unknown>>;
+        const rawRequired = inputObj?.['required'];
+        const requiredList = Array.isArray(rawRequired) ? (rawRequired as string[]) : [];
+        for (const [key, propSchema] of Object.entries(props)) {
+          if (!pathParams.includes(key)) {
+            parameters.push({
+              name: key,
+              in: 'query',
+              required: requiredList.includes(key),
+              schema: propSchema,
+              description:
+                typeof propSchema?.['description'] === 'string'
+                  ? propSchema['description']
+                  : `Query parameter: ${key}`,
+            });
+          }
+        }
+      }
+    }
+
     const successCode = action.http.successStatus ?? 200;
 
     const operation: Record<string, unknown> = {
@@ -96,6 +121,10 @@ export function generateOpenApiSpec(
           description: 'Forbidden / Insufficient Scopes',
           content: { 'application/problem+json': { schema: { type: 'object' } } },
         },
+        '404': {
+          description: 'Not Found',
+          content: { 'application/problem+json': { schema: { type: 'object' } } },
+        },
         '413': {
           description: 'Payload Too Large',
           content: { 'application/problem+json': { schema: { type: 'object' } } },
@@ -113,6 +142,10 @@ export function generateOpenApiSpec(
 
     if (action.deprecated) {
       operation['deprecated'] = true;
+    }
+
+    if (action.authRequired) {
+      operation['security'] = [{ bearerAuth: [] }, { apiKeyAuth: [] }];
     }
 
     // Attach requestBody for mutating operations
@@ -135,6 +168,23 @@ export function generateOpenApiSpec(
     methodMap[method] = operation;
   }
 
+  const components: Record<string, unknown> = {
+    securitySchemes: {
+      bearerAuth: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'JWT Bearer authentication',
+      },
+      apiKeyAuth: {
+        type: 'apiKey',
+        in: 'header',
+        name: config.security.apiKeyHeaderName,
+        description: 'Static API Key authentication',
+      },
+    },
+  };
+
   const spec = {
     openapi: '3.1.0',
     info: {
@@ -142,7 +192,14 @@ export function generateOpenApiSpec(
       version: config.observability.serviceVersion,
       description: 'Shukoi Auto-Generated OpenAPI 3.1.0 Specification',
     },
+    servers: [
+      {
+        url: '/',
+        description: 'Default Server',
+      },
+    ],
     paths,
+    components,
   };
 
   return Object.freeze(spec);
