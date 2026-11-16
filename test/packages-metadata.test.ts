@@ -74,4 +74,19 @@ describe('Package License & NPM Metadata Integrity', () => {
     const mcpPkg = JSON.parse(await fs.readFile(mcpPkgPath, 'utf-8'));
     expect(mcpPkg.peerDependenciesMeta?.hono?.optional).toBe(true);
   });
+
+  it('verifies that root package manifest declares valid MIT license, author, and synchronized version', async () => {
+    const rootPkgPath = path.resolve('package.json');
+    const rootPkg = JSON.parse(await fs.readFile(rootPkgPath, 'utf-8'));
+
+    expect(rootPkg.license).toBe('MIT');
+    expect(rootPkg.author).toBe('shukoilab');
+    expect(rootPkg.homepage).toBe('https://github.com/shukoilab/shukoi#readme');
+    expect(rootPkg.repository?.url).toBe('git+https://github.com/shukoilab/shukoi.git');
+    expect(rootPkg.bugs).toBe('https://github.com/shukoilab/shukoi/issues');
+
+    const corePkgPath = path.resolve('packages', 'core', 'package.json');
+    const corePkg = JSON.parse(await fs.readFile(corePkgPath, 'utf-8'));
+    expect(rootPkg.version).toBe(corePkg.version);
+  });
 });

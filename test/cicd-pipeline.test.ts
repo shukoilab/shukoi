@@ -61,13 +61,22 @@ describe('CI/CD & Release Pipeline Integrity', () => {
     expect(fixedPackages).toContain('create-shukoi');
   });
 
-  it('verifies sync-cli-template-versions.mjs runs cleanly and updates version', async () => {
+  it('verifies sync-cli-template-versions.mjs runs cleanly and updates version across all packages and root', async () => {
     const version = await syncCliTemplateVersions();
     expect(version).toBeDefined();
 
     const cliIndexPath = path.resolve('packages', 'create-shukoi', 'src', 'index.ts');
     const cliContent = await fs.readFile(cliIndexPath, 'utf-8');
     expect(cliContent).toContain(`'@shukoi/core': '^${version}'`);
+    expect(cliContent).toContain(`dependencies['@shukoi/api'] = '^${version}'`);
+    expect(cliContent).toContain(`dependencies['@shukoi/mcp'] = '^${version}'`);
+    expect(cliContent).toContain(`dependencies['@shukoi/cloudflare'] = '^${version}'`);
+    expect(cliContent).toContain(`dependencies['@shukoi/lambda'] = '^${version}'`);
+    expect(cliContent).toContain(`dependencies['@shukoi/selfhost'] = '^${version}'`);
+
+    const rootPkgPath = path.resolve('package.json');
+    const rootPkg = JSON.parse(await fs.readFile(rootPkgPath, 'utf-8'));
+    expect(rootPkg.version).toBe(version);
   });
 
   it('runs publint across core packages without errors', () => {

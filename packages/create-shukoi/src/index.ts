@@ -126,24 +126,24 @@ export async function scaffoldProject(
   }
 
   if (options.products.includes('api')) {
-    dependencies['@shukoi/api'] = '^1.0.0';
+    dependencies['@shukoi/api'] = '^1.0.2';
   }
 
   if (options.products.includes('mcp-http') || options.products.includes('mcp-stdio')) {
-    dependencies['@shukoi/mcp'] = '^1.0.0';
+    dependencies['@shukoi/mcp'] = '^1.0.2';
     dependencies['@modelcontextprotocol/sdk'] = '^1.32.2';
   }
 
   if (options.targets.includes('cloudflare')) {
-    dependencies['@shukoi/cloudflare'] = '^1.0.0';
+    dependencies['@shukoi/cloudflare'] = '^1.0.2';
   }
 
   if (options.targets.includes('lambda')) {
-    dependencies['@shukoi/lambda'] = '^1.0.0';
+    dependencies['@shukoi/lambda'] = '^1.0.2';
   }
 
   if (options.targets.includes('selfhost')) {
-    dependencies['@shukoi/selfhost'] = '^1.0.0';
+    dependencies['@shukoi/selfhost'] = '^1.0.2';
   }
 
   const scripts: Record<string, string> = {
@@ -168,6 +168,7 @@ export async function scaffoldProject(
     name: options.projectName,
     version: '1.0.0',
     type: 'module',
+    license: 'MIT',
     scripts,
     dependencies,
     devDependencies,

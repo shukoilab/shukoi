@@ -50,9 +50,13 @@ describe('create-shukoi Scaffolder', () => {
     const pkgContent = await fs.readFile(path.join(projectDir, 'package.json'), 'utf-8');
     const pkg = JSON.parse(pkgContent);
 
-    // Dependencies MUST include @shukoi/api and @shukoi/selfhost
-    expect(pkg.dependencies['@shukoi/api']).toBeDefined();
-    expect(pkg.dependencies['@shukoi/selfhost']).toBeDefined();
+    // License must be MIT
+    expect(pkg.license).toBe('MIT');
+
+    // Dependencies MUST include @shukoi/api and @shukoi/selfhost matching active version
+    expect(pkg.dependencies['@shukoi/core']).toBe('^1.0.2');
+    expect(pkg.dependencies['@shukoi/api']).toBe('^1.0.2');
+    expect(pkg.dependencies['@shukoi/selfhost']).toBe('^1.0.2');
 
     // Dependencies MUST NOT include @shukoi/cloudflare, @shukoi/lambda, or @shukoi/mcp (PRUNED!)
     expect(pkg.dependencies['@shukoi/cloudflare']).toBeUndefined();
