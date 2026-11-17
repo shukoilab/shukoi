@@ -13,7 +13,17 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('Package README Documentation Integrity', () => {
-  const packages = ['core', 'api', 'mcp', 'cloudflare', 'lambda', 'selfhost', 'create-shukoi'];
+  const packages = [
+    'core',
+    'api',
+    'mcp',
+    'cloudflare',
+    'lambda',
+    'selfhost',
+    'store-redis',
+    'ratelimit',
+    'create-shukoi',
+  ];
 
   it('verifies that all 7 packages contain comprehensive, fluent English READMEs', async () => {
     for (const pkg of packages) {

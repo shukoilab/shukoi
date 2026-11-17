@@ -13,7 +13,17 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('Package License & NPM Metadata Integrity', () => {
-  const packages = ['core', 'api', 'mcp', 'cloudflare', 'lambda', 'selfhost', 'create-shukoi'];
+  const packages = [
+    'core',
+    'api',
+    'mcp',
+    'cloudflare',
+    'lambda',
+    'selfhost',
+    'store-redis',
+    'ratelimit',
+    'create-shukoi',
+  ];
 
   it('verifies that every package contains an authentic MIT LICENSE file on disk', async () => {
     for (const pkg of packages) {

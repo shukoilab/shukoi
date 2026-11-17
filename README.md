@@ -43,17 +43,17 @@ Shukoi automatically compiles and mounts your action across three production out
 ```text
                1 Core Engine (@shukoi/core: defineAction)
                                   │
-         ┌────────────────────────┴────────────────────────┐
-         ▼                                                 ▼
-   Protocol Module A                                 Protocol Module B
-     (@shukoi/api)                                     (@shukoi/mcp)
-         │                                                 │
-   ┌─────┴─────┐                                     ┌─────┴─────┐
-   ▼           ▼                                     ▼           ▼
-1. REST API  2. OpenAPI 3.1.0                  3. MCP HTTP    4. MCP STDIO
-   │           │                                     │           │
-   └───────────┼─────────────────────────────────────┴───────────┘
-               ▼
+         ┌────────────────────────┼────────────────────────┐
+         ▼                        ▼                        ▼
+   Protocol Module A        Protocol Module B       Distributed Resilience
+     (@shukoi/api)            (@shukoi/mcp)          (@shukoi/store-redis &
+         │                        │                  @shukoi/ratelimit)
+   ┌─────┴─────┐            ┌─────┴─────┐                  │
+   ▼           ▼            ▼           ▼                  ▼
+1. REST API  2. OpenAPI   3. MCP HTTP 4. MCP STDIO    Atomic Idempotency &
+   │           │            │           │             Sliding Window Rate Limit
+   └───────────┼────────────┴───────────┼──────────────────┘
+               ▼                        ▼
      3 Deployment Runtime Targets
        • Cloudflare Workers (@shukoi/cloudflare: V8 Isolates, waitUntil, D1/KV mocks)
        • AWS Lambda (@shukoi/lambda: Node.js 22+ ESM, dynamic deadline, cookies, mocks)
@@ -150,6 +150,8 @@ Shukoi was architected from day one to enforce **Twelve Non-Negotiable Invariant
 - 🛑 **Production Process Lifecycle:**
   - **Self-Host:** Built-in Kubernetes probes (`/healthz/live` & `/healthz/ready`). On `SIGTERM`/`SIGINT`, readiness flips to 503, socket listeners stop accepting new ingress, active requests drain up to the grace period, and database connections close cleanly.
   - **AWS Lambda:** Dynamically computes `effectiveTimeoutMs = min(actionTimeout, remainingTime - lambdaDeadlineBufferMs)`. Aborts with 504 before AWS freezes the container, ensuring database transactions roll back cleanly.
+- 🔒 **Distributed Atomic Idempotency (`@shukoi/store-redis`):** Eliminates TOCTOU race conditions across multi-instance clusters via atomic Redis Lua scripts (`ACQUIRE_LUA`, `COMPLETE_LUA`, `RELEASE_LUA`). Ships dual runtimes: native TCP socket pool (`./node`) for Node/Bun and pure Web-fetch `UpstashRedisClient` (`./edge`) with zero `node:*` imports for Cloudflare Workers.
+- 🚦 **Universal Rate Limiting & DoS Defense (`@shukoi/ratelimit`):** Dual-algorithm engine featuring Sliding Window Counter (smooth, boundary burst-free) and Token Bucket (burst-tolerant for LLM token quotas). Emits standard IETF draft headers (`RateLimit-*`, `Retry-After`), integrates with RFC 9457 (429 Problem Details), and strictly caps in-memory fallback memory to $O(1)$ space via `BoundedLruCache(10000)`.
 
 ---
 
@@ -171,6 +173,8 @@ bun create shukoi@latest my-service
 npm create shukoi@latest my-service -- \
   --products api,mcp-http \
   --targets cloudflare,selfhost \
+  --idempotency redis \
+  --ratelimit redis \
   --pm pnpm
 ```
 
@@ -194,6 +198,8 @@ Every scaffolded project includes:
 | **`@shukoi/cloudflare`**| Cloudflare Workers V8 Isolate Adapter (`getCloudflareContext`, `waitUntil`, `./testing` mocks) | **Forbidden** (Pure Web Standard) | Cloudflare Workers |
 | **`@shukoi/lambda`** | AWS Lambda Adapter with dynamic deadline subtraction (`getLambdaContext`, cookies, `./testing` mocks) | Permitted | AWS Lambda |
 | **`@shukoi/selfhost`** | Bun/Node Server with Graceful Drain, OOM 413 defense (`getSelfHostContext`, probes, `./testing` mocks) | Permitted | Bun 1.2+ / Node 22+ |
+| **`@shukoi/store-redis`** | Distributed Redis Idempotency Store with atomic Lua scripts, dual runtime (`./node` and `./edge`), and in-memory mocks (`./testing`) | Allowed only in `./node` (Edge is pure Web fetch) | Node/Bun & Cloudflare Workers |
+| **`@shukoi/ratelimit`** | Universal Distributed Rate Limiter (Sliding Window & Token Bucket) with bounded LRU memory protection, IETF headers, and in-memory mocks (`./testing`) | **Forbidden** (Pure Web Standard) | All Runtimes |
 | **`create-shukoi`** | Interactive Clack & CI automation project scaffolder CLI | Permitted | Node 22+ / Bun |
 
 ---

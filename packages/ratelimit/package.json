@@ -1,0 +1,54 @@
+{
+  "name": "@shukoi/ratelimit",
+  "version": "1.0.3",
+  "description": "Universal distributed rate limiter (Sliding Window & Token Bucket) with IETF RFC headers for Shukoi.",
+  "keywords": [
+    "shukoi",
+    "ratelimit",
+    "rate-limiting",
+    "sliding-window",
+    "token-bucket",
+    "redis",
+    "edge",
+    "cloudflare-workers"
+  ],
+  "license": "MIT",
+  "author": "shukoilab",
+  "homepage": "https://shukoilab.github.io/shukoi/",
+  "bugs": "https://github.com/shukoilab/shukoi/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shukoilab/shukoi.git",
+    "directory": "packages/ratelimit"
+  },
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@shukoi/core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

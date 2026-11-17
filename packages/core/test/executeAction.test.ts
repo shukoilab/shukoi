@@ -134,4 +134,157 @@ describe('executeAction Pipeline', () => {
       harness.execute(longRunningAction, {}, { signal: controller.signal }),
     ).rejects.toThrow(DomainError);
   });
+
+  it('executes ctx.transaction with strongly-typed services and custom transaction provider', async () => {
+    interface MockDb {
+      counter: number;
+    }
+
+    const inputSchema = Type.Object({ value: Type.Integer() });
+    const outputSchema = Type.Object({ total: Type.Integer() });
+
+    const action = defineAction<
+      typeof inputSchema,
+      typeof outputSchema,
+      unknown,
+      unknown,
+      { db: MockDb }
+    >({
+      name: 'txAction',
+      description: 'Tests transactional unit of work',
+      authRequired: false,
+      input: inputSchema,
+      output: outputSchema,
+      async handler(input, ctx) {
+        return await ctx.transaction(async (tx) => {
+          tx.db.counter += input.value;
+          return { total: tx.db.counter };
+        });
+      },
+    });
+
+    const mockDb: MockDb = { counter: 10 };
+    let providerCalled = false;
+
+    const result = await harness.execute(
+      action,
+      { value: 5 },
+      {
+        services: { db: mockDb },
+        transactionProvider: async (handler) => {
+          providerCalled = true;
+          return await handler({ db: mockDb });
+        },
+      },
+    );
+
+    expect(result).toEqual({ total: 15 });
+    expect(providerCalled).toBe(true);
+    expect(mockDb.counter).toBe(15);
+  });
+
+  it('triggers ShukoiPlugin lifecycle hooks (start, success, teardown)', async () => {
+    const lifecycle: string[] = [];
+
+    const mockPlugin = {
+      name: 'test-telemetry',
+      onActionStart() {
+        lifecycle.push('start');
+      },
+      onActionSuccess() {
+        lifecycle.push('success');
+      },
+      onActionError() {
+        lifecycle.push('error');
+      },
+      onActionTeardown() {
+        lifecycle.push('teardown');
+      },
+    };
+
+    const action = defineAction({
+      name: 'pluginAction',
+      description: 'Tests plugin hooks',
+      authRequired: false,
+      input: Type.Object({}),
+      output: Type.Object({ ok: Type.Boolean() }),
+      async handler() {
+        return { ok: true };
+      },
+    });
+
+    const result = await harness.execute(action, {}, { plugins: [mockPlugin] });
+    expect(result).toEqual({ ok: true });
+    expect(lifecycle).toEqual(['start', 'success', 'teardown']);
+  });
+
+  it('triggers ShukoiPlugin onActionError hook when action throws and completes teardown', async () => {
+    const lifecycle: string[] = [];
+    let capturedError: Error | null = null;
+
+    const mockPlugin = {
+      name: 'error-telemetry',
+      onActionStart() {
+        lifecycle.push('start');
+      },
+      onActionSuccess() {
+        lifecycle.push('success');
+      },
+      onActionError(_action: unknown, _ctx: unknown, error: Error) {
+        lifecycle.push('error');
+        capturedError = error;
+      },
+      onActionTeardown() {
+        lifecycle.push('teardown');
+      },
+    };
+
+    const failingAction = defineAction({
+      name: 'failingAction',
+      description: 'Fails with domain error',
+      authRequired: false,
+      input: Type.Object({}),
+      output: Type.Object({ ok: Type.Boolean() }),
+      async handler() {
+        throw new DomainError('BAD_REQUEST', 'Simulated failure', 400);
+      },
+    });
+
+    await expect(harness.execute(failingAction, {}, { plugins: [mockPlugin] })).rejects.toThrow(
+      DomainError,
+    );
+
+    expect(lifecycle).toEqual(['start', 'error', 'teardown']);
+    expect(capturedError).toBeInstanceOf(DomainError);
+    expect((capturedError as unknown as DomainError).code).toBe('BAD_REQUEST');
+  });
+
+  it('rejects ctx.transaction when composite signal is aborted or transaction handler throws', async () => {
+    const action = defineAction({
+      name: 'txAbortAction',
+      description: 'Tests transaction abort',
+      authRequired: false,
+      input: Type.Object({ shouldFail: Type.Boolean() }),
+      output: Type.Object({ ok: Type.Boolean() }),
+      async handler(input, ctx) {
+        return await ctx.transaction(async () => {
+          if (input.shouldFail) {
+            throw new DomainError('CONFLICT', 'Transaction conflict rollback', 409);
+          }
+          return { ok: true };
+        });
+      },
+    });
+
+    // 1. Handler throws inside transaction
+    await expect(harness.execute(action, { shouldFail: true })).rejects.toThrow(DomainError);
+
+    // 2. Pre-aborted signal passed to transaction
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      harness.execute(action, { shouldFail: false }, { signal: controller.signal }),
+    ).rejects.toThrow(DomainError);
+  });
 });

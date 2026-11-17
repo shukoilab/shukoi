@@ -66,6 +66,10 @@ export interface ActionExecutionContext<TUser = unknown, TPlatform = unknown, TS
   readonly logger: ShukoiLogger;
   reportProgress(progress: number, total?: number, message?: string): Promise<void>;
   onFinally(cleanupFn: () => Promise<void> | void): void;
+  transaction<TResult>(
+    handler: (txServices: Readonly<TServices>) => Promise<TResult>,
+    options?: { readonly timeoutMs?: number | undefined },
+  ): Promise<TResult>;
 }
 
 /**

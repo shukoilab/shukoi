@@ -39,13 +39,15 @@ jobs:
 
       - name: Audit NPM Exports & Subpath Types (publint + attw)
         run: |
-          pnpm dlx publint packages/core packages/api packages/mcp packages/cloudflare packages/lambda packages/selfhost
+          pnpm dlx publint packages/core packages/api packages/mcp packages/cloudflare packages/lambda packages/selfhost packages/store-redis packages/ratelimit
           pnpm dlx @arethetypeswrong/cli --pack packages/core --profile esm-only
           pnpm dlx @arethetypeswrong/cli --pack packages/mcp --profile esm-only
+          pnpm dlx @arethetypeswrong/cli --pack packages/store-redis --profile esm-only
+          pnpm dlx @arethetypeswrong/cli --pack packages/ratelimit --profile esm-only
 
       - name: Verify Zero node:* Leakage for Edge Runtime
         run: |
-          pnpm dlx esbuild packages/core/dist/index.js packages/api/dist/index.js packages/mcp/dist/http.js packages/cloudflare/dist/index.js \
+          pnpm dlx esbuild packages/core/dist/index.js packages/api/dist/index.js packages/mcp/dist/http.js packages/cloudflare/dist/index.js packages/store-redis/dist/edge.js packages/ratelimit/dist/index.js \
             --bundle --platform=browser --format=esm --outdir=/tmp/edge-audit \
             --external:hono --external:@sinclair/typebox --external:@modelcontextprotocol/sdk
 

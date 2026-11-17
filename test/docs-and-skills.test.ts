@@ -17,7 +17,7 @@ describe('AI Context & Documentation Architecture', () => {
     const skillsDir = path.resolve('skills');
     const skillFolders = await fs.readdir(skillsDir);
 
-    expect(skillFolders.length).toBeGreaterThanOrEqual(3);
+    expect(skillFolders.length).toBeGreaterThanOrEqual(4);
 
     for (const folder of skillFolders) {
       const skillMdPath = path.join(skillsDir, folder, 'SKILL.md');
@@ -73,8 +73,18 @@ describe('AI Context & Documentation Architecture', () => {
     }
   });
 
-  it('verifies all 7 packages contain scoped AGENTS.md constitutions', async () => {
-    const packages = ['core', 'api', 'mcp', 'cloudflare', 'lambda', 'selfhost', 'create-shukoi'];
+  it('verifies all 9 packages contain scoped AGENTS.md constitutions', async () => {
+    const packages = [
+      'core',
+      'api',
+      'mcp',
+      'cloudflare',
+      'lambda',
+      'selfhost',
+      'store-redis',
+      'ratelimit',
+      'create-shukoi',
+    ];
 
     for (const pkg of packages) {
       const agentsMdPath = path.resolve('packages', pkg, 'AGENTS.md');

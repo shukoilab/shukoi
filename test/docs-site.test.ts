@@ -50,6 +50,8 @@ describe('VitePress Documentation Site & GitHub Pages Integrity', () => {
       'docs/guide/actions.md',
       'docs/guide/errors.md',
       'docs/guide/testing.md',
+      'docs/guide/idempotency.md',
+      'docs/guide/rate-limiting.md',
       'docs/protocols/rest-api.md',
       'docs/protocols/mcp.md',
       'docs/runtimes/cloudflare.md',

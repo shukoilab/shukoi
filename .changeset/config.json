@@ -10,6 +10,8 @@
       "@shukoi/cloudflare",
       "@shukoi/lambda",
       "@shukoi/selfhost",
+      "@shukoi/store-redis",
+      "@shukoi/ratelimit",
       "create-shukoi"
     ]
   ],

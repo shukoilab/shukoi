@@ -13,6 +13,8 @@ import pc from 'picocolors';
 export type ShukoiProduct = 'api' | 'mcp-http' | 'mcp-stdio';
 export type ShukoiTarget = 'cloudflare' | 'lambda' | 'selfhost';
 export type PackageManager = 'pnpm' | 'npm' | 'bun';
+export type IdempotencyOption = 'memory' | 'redis' | 'none';
+export type RateLimitOption = 'memory' | 'redis' | 'none';
 
 /**
  * @purpose Configuration options for scaffolding a new Shukoi project.
@@ -26,6 +28,8 @@ export interface ScaffoldOptions {
   readonly targets: readonly ShukoiTarget[];
   readonly packageManager: PackageManager;
   readonly includeLinter?: boolean | undefined;
+  readonly idempotency?: IdempotencyOption | undefined;
+  readonly ratelimit?: RateLimitOption | undefined;
 }
 
 /**
@@ -44,6 +48,8 @@ export function parseCliArgs(argv: readonly string[]): Partial<ScaffoldOptions> 
     targets?: ShukoiTarget[];
     packageManager?: PackageManager;
     includeLinter?: boolean;
+    idempotency?: IdempotencyOption;
+    ratelimit?: RateLimitOption;
   } = {};
 
   for (let i = 0; i < argv.length; i++) {
@@ -77,6 +83,16 @@ export function parseCliArgs(argv: readonly string[]): Partial<ScaffoldOptions> 
       i++;
     } else if (arg.startsWith('--pm=')) {
       result.packageManager = arg.slice(5).trim() as PackageManager;
+    } else if (arg === '--idempotency' && argv[i + 1]) {
+      result.idempotency = argv[i + 1]?.trim() as IdempotencyOption;
+      i++;
+    } else if (arg.startsWith('--idempotency=')) {
+      result.idempotency = arg.slice(14).trim() as IdempotencyOption;
+    } else if (arg === '--ratelimit' && argv[i + 1]) {
+      result.ratelimit = argv[i + 1]?.trim() as RateLimitOption;
+      i++;
+    } else if (arg.startsWith('--ratelimit=')) {
+      result.ratelimit = arg.slice(12).trim() as RateLimitOption;
     } else if (!arg.startsWith('-') && !result.projectName) {
       result.projectName = arg;
     }
@@ -154,6 +170,14 @@ export async function scaffoldProject(
 
   if (options.targets.includes('selfhost')) {
     dependencies['@shukoi/selfhost'] = '^1.0.3';
+  }
+
+  if (options.idempotency === 'redis') {
+    dependencies['@shukoi/store-redis'] = '^1.0.3';
+  }
+
+  if (options.ratelimit === 'redis' || options.ratelimit === 'memory') {
+    dependencies['@shukoi/ratelimit'] = '^1.0.3';
   }
 
   const scripts: Record<string, string> = {
@@ -634,6 +658,9 @@ export async function runCli(argv: readonly string[]): Promise<void> {
       products,
       targets,
       packageManager,
+      includeLinter: parsed.includeLinter,
+      idempotency: parsed.idempotency,
+      ratelimit: parsed.ratelimit,
     });
     console.log(pc.green(`✔ Created Shukoi project "${projectName}" at ${projectDir}`));
     console.log(`Generated ${filesCreated.length} files.`);
@@ -724,6 +751,9 @@ export async function runCli(argv: readonly string[]): Promise<void> {
     products,
     targets,
     packageManager,
+    includeLinter: parsed.includeLinter,
+    idempotency: parsed.idempotency,
+    ratelimit: parsed.ratelimit,
   });
 
   spinner.stop(`Scaffolded ${filesCreated.length} files cleanly.`);

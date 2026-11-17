@@ -147,6 +147,19 @@ importers:
         specifier: ^4.7.0
         version: 4.13.18
 
+  packages/ratelimit:
+    dependencies:
+      '@shukoi/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@22.20.5)(jiti@2.7.0)(supports-color@7.2.0)(yaml@2.9.1)
+
   packages/selfhost:
     dependencies:
       '@shukoi/core':
@@ -162,6 +175,19 @@ importers:
       hono:
         specifier: ^4.7.0
         version: 4.13.18
+
+  packages/store-redis:
+    dependencies:
+      '@shukoi/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@22.20.5)(jiti@2.7.0)(supports-color@7.2.0)(yaml@2.9.1)
 
 packages:
 

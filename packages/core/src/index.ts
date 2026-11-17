@@ -12,4 +12,5 @@ export * from './errors.js';
 export * from './executeAction.js';
 export * from './idempotency.js';
 export * from './logger.js';
+export * from './plugin.js';
 export * from './validator.js';

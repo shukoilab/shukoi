@@ -47,7 +47,8 @@
         "packages/api/**",
         "packages/mcp/src/http.ts",
         "packages/mcp/src/shared.ts",
-        "packages/cloudflare/**"
+        "packages/cloudflare/**",
+        "packages/ratelimit/**"
       ],
       "linter": {
         "rules": {
@@ -64,7 +65,9 @@
         "packages/mcp/src/http.ts",
         "packages/cloudflare/src/**",
         "packages/lambda/src/**",
-        "packages/selfhost/src/**"
+        "packages/selfhost/src/**",
+        "packages/store-redis/src/**",
+        "packages/ratelimit/src/**"
       ],
       "linter": {
         "rules": {

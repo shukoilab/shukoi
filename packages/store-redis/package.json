@@ -1,0 +1,61 @@
+{
+  "name": "@shukoi/store-redis",
+  "version": "1.0.3",
+  "description": "Distributed Redis idempotency lock store with atomic Lua scripts and Edge HTTP fallback for Shukoi.",
+  "keywords": [
+    "shukoi",
+    "redis",
+    "idempotency",
+    "distributed-lock",
+    "edge",
+    "cloudflare-workers",
+    "upstash"
+  ],
+  "license": "MIT",
+  "author": "shukoilab",
+  "homepage": "https://shukoilab.github.io/shukoi/",
+  "bugs": "https://github.com/shukoilab/shukoi/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shukoilab/shukoi.git",
+    "directory": "packages/store-redis"
+  },
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./edge": {
+      "types": "./dist/edge.d.ts",
+      "import": "./dist/edge.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@shukoi/core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

@@ -70,6 +70,13 @@ export default defineConfig({
             { text: 'Testing & Mocks', link: '/guide/testing' },
           ],
         },
+        {
+          text: 'Resilience & Concurrency',
+          items: [
+            { text: 'Distributed Idempotency', link: '/guide/idempotency' },
+            { text: 'Rate Limiting & Quotas', link: '/guide/rate-limiting' },
+          ],
+        },
       ],
       '/protocols/': [
         {

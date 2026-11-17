@@ -58,6 +58,8 @@ describe('CI/CD & Release Pipeline Integrity', () => {
     expect(fixedPackages).toContain('@shukoi/cloudflare');
     expect(fixedPackages).toContain('@shukoi/lambda');
     expect(fixedPackages).toContain('@shukoi/selfhost');
+    expect(fixedPackages).toContain('@shukoi/store-redis');
+    expect(fixedPackages).toContain('@shukoi/ratelimit');
     expect(fixedPackages).toContain('create-shukoi');
   });
 
@@ -73,6 +75,8 @@ describe('CI/CD & Release Pipeline Integrity', () => {
     expect(cliContent).toContain(`dependencies['@shukoi/cloudflare'] = '^${version}'`);
     expect(cliContent).toContain(`dependencies['@shukoi/lambda'] = '^${version}'`);
     expect(cliContent).toContain(`dependencies['@shukoi/selfhost'] = '^${version}'`);
+    expect(cliContent).toContain(`dependencies['@shukoi/store-redis'] = '^${version}'`);
+    expect(cliContent).toContain(`dependencies['@shukoi/ratelimit'] = '^${version}'`);
 
     const rootPkgPath = path.resolve('package.json');
     const rootPkg = JSON.parse(await fs.readFile(rootPkgPath, 'utf-8'));
@@ -81,7 +85,7 @@ describe('CI/CD & Release Pipeline Integrity', () => {
 
   it('runs publint across core packages without errors', () => {
     const output = execSync(
-      'pnpm dlx publint packages/core packages/api packages/mcp packages/cloudflare packages/lambda packages/selfhost',
+      'pnpm dlx publint packages/core packages/api packages/mcp packages/cloudflare packages/lambda packages/selfhost packages/store-redis packages/ratelimit',
       { encoding: 'utf-8', cwd: process.cwd() },
     );
     expect(output).not.toContain('Errors:');
@@ -99,11 +103,23 @@ describe('CI/CD & Release Pipeline Integrity', () => {
       { encoding: 'utf-8', cwd: process.cwd() },
     );
     expect(mcpOutput).toContain('node16 (from ESM)');
+
+    const redisOutput = execSync(
+      'pnpm dlx @arethetypeswrong/cli --pack packages/store-redis --profile esm-only',
+      { encoding: 'utf-8', cwd: process.cwd() },
+    );
+    expect(redisOutput).toContain('node16 (from ESM)');
+
+    const rateOutput = execSync(
+      'pnpm dlx @arethetypeswrong/cli --pack packages/ratelimit --profile esm-only',
+      { encoding: 'utf-8', cwd: process.cwd() },
+    );
+    expect(rateOutput).toContain('node16 (from ESM)');
   });
 
   it('runs esbuild browser bundling dry-run verifying zero node:* leakage on edge packages', () => {
     const output = execSync(
-      'pnpm dlx esbuild packages/core/dist/index.js packages/api/dist/index.js packages/mcp/dist/http.js packages/cloudflare/dist/index.js --bundle --platform=browser --format=esm --outdir=/tmp/test-edge-audit --external:hono --external:@sinclair/typebox --external:@modelcontextprotocol/sdk 2>&1',
+      'pnpm dlx esbuild packages/core/dist/index.js packages/api/dist/index.js packages/mcp/dist/http.js packages/cloudflare/dist/index.js packages/store-redis/dist/edge.js packages/ratelimit/dist/index.js --bundle --platform=browser --format=esm --outdir=/tmp/test-edge-audit --external:hono --external:@sinclair/typebox --external:@modelcontextprotocol/sdk 2>&1',
       { encoding: 'utf-8', cwd: process.cwd() },
     );
     expect(output).toContain('Done');

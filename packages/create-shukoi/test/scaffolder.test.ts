@@ -9,7 +9,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseCliArgs, scaffoldProject } from '../src/index.js';
+import { parseCliArgs, runCli, scaffoldProject } from '../src/index.js';
 
 describe('create-shukoi Scaffolder', () => {
   it('correctly parses CLI arguments for automated non-interactive scaffolding', () => {
@@ -85,6 +85,85 @@ describe('create-shukoi Scaffolder', () => {
 
     // Cleanup
     await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('scaffolds project with distributed Redis idempotency and rate limiting when flags are supplied', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'shukoi-test-distributed-'));
+    const projectName = 'distributed-service';
+
+    const parsed = parseCliArgs([
+      'distributed-service',
+      '--products',
+      'api',
+      '--targets',
+      'selfhost',
+      '--idempotency',
+      'redis',
+      '--ratelimit',
+      'redis',
+      '--pm',
+      'pnpm',
+    ]);
+    expect(parsed.idempotency).toBe('redis');
+    expect(parsed.ratelimit).toBe('redis');
+
+    const { projectDir } = await scaffoldProject({
+      projectName,
+      targetDir: tmpDir,
+      products: ['api'],
+      targets: ['selfhost'],
+      packageManager: 'pnpm',
+      idempotency: 'redis',
+      ratelimit: 'redis',
+    });
+
+    const corePkgRaw = await fs.readFile(
+      new URL('../../core/package.json', import.meta.url),
+      'utf-8',
+    );
+    const { version: activeVersion } = JSON.parse(corePkgRaw);
+
+    const pkgContent = await fs.readFile(path.join(projectDir, 'package.json'), 'utf-8');
+    const pkg = JSON.parse(pkgContent);
+
+    expect(pkg.dependencies['@shukoi/store-redis']).toBe(`^${activeVersion}`);
+    expect(pkg.dependencies['@shukoi/ratelimit']).toBe(`^${activeVersion}`);
+
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('executes runCli non-interactively and forwards idempotency and ratelimit flags', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'shukoi-runcli-'));
+    const originalCwd = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      await runCli([
+        'cli-tested-app',
+        '--products',
+        'api',
+        '--targets',
+        'selfhost',
+        '--pm',
+        'pnpm',
+        '--idempotency',
+        'redis',
+        '--ratelimit',
+        'redis',
+        '--no-linter',
+      ]);
+
+      const pkgRaw = await fs.readFile(
+        path.join(tmpDir, 'cli-tested-app', 'package.json'),
+        'utf-8',
+      );
+      const pkg = JSON.parse(pkgRaw);
+      expect(pkg.dependencies['@shukoi/store-redis']).toBeDefined();
+      expect(pkg.dependencies['@shukoi/ratelimit']).toBeDefined();
+      expect(pkg.devDependencies['@biomejs/biome']).toBeUndefined();
+    } finally {
+      process.chdir(originalCwd);
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
   });
 
   it('omits biome.json and skips @biomejs/biome when --no-linter is supplied', async () => {

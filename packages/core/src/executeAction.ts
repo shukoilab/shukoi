@@ -12,7 +12,18 @@ import type { ShukoiConfig } from './config.js';
 import { DomainError } from './errors.js';
 import type { IdempotencyStore } from './idempotency.js';
 import { createShukoiLogger, type ShukoiLogger } from './logger.js';
+import type { ShukoiPlugin } from './plugin.js';
 import { cleanAndValidateOutput, sanitizeRawInput } from './validator.js';
+
+/**
+ * @purpose Universal transaction provider signature for database and Unit-of-Work integrations.
+ * @rationale Encapsulates atomic isolation, rollback, and savepoints across arbitrary database ORMs.
+ * @invariants Preserves caller timeout and abort signals.
+ */
+export type TransactionProvider<TServices = unknown> = (
+  handler: (txServices: Readonly<TServices>) => Promise<unknown>,
+  options?: { readonly timeoutMs?: number | undefined; readonly signal?: AbortSignal | undefined },
+) => Promise<unknown>;
 
 /**
  * @purpose Options parameterizing an action execution invocation.
@@ -32,6 +43,8 @@ export interface ExecuteActionOptions<TPlatform = unknown, TServices = unknown> 
   readonly progressReporter?:
     | ((progress: number, total?: number, message?: string) => Promise<void>)
     | undefined;
+  readonly plugins?: readonly ShukoiPlugin[] | undefined;
+  readonly transactionProvider?: TransactionProvider<TServices> | undefined;
 }
 
 /**
@@ -165,7 +178,70 @@ export async function executeAction<
     onFinally(cleanupFn: () => Promise<void> | void): void {
       cleanupHooks.push(cleanupFn);
     },
+    async transaction<TResult>(
+      handler: (txServices: Readonly<TServices>) => Promise<TResult>,
+      txOptions?: { readonly timeoutMs?: number | undefined },
+    ): Promise<TResult> {
+      if (combinedSignal.aborted) {
+        throw new DomainError('GATEWAY_TIMEOUT', 'Transaction aborted prior to start', 504);
+      }
+      const timeoutMs = txOptions?.timeoutMs ?? effectiveTimeoutMs;
+      const txSignal = AbortSignal.timeout(timeoutMs);
+      const compositeTxSignal = AbortSignal.any([combinedSignal, txSignal]);
+
+      if (options.transactionProvider) {
+        return (await options.transactionProvider(
+          handler as (txServices: Readonly<TServices>) => Promise<unknown>,
+          {
+            timeoutMs,
+            signal: compositeTxSignal,
+          },
+        )) as TResult;
+      }
+
+      const svc = options.services;
+      if (
+        typeof svc === 'object' &&
+        svc !== null &&
+        'transaction' in svc &&
+        typeof (svc as { transaction: unknown }).transaction === 'function'
+      ) {
+        return await (svc as { transaction: (h: typeof handler) => Promise<TResult> }).transaction(
+          handler,
+        );
+      }
+
+      if (compositeTxSignal.aborted) {
+        throw new DomainError('GATEWAY_TIMEOUT', 'Transaction timed out', 504);
+      }
+      return await handler(options.services as TServices);
+    },
   });
+
+  const genericAction = action as unknown as CompiledAction<
+    TSchema,
+    TSchema,
+    unknown,
+    unknown,
+    unknown
+  >;
+  const genericCtx = ctx as unknown as ActionExecutionContext<unknown, unknown, unknown>;
+
+  // Step 6a: Plugin Lifecycle onActionStart Hook
+  if (options.plugins) {
+    for (const plugin of options.plugins) {
+      if (plugin.onActionStart) {
+        try {
+          await plugin.onActionStart(genericAction, genericCtx);
+        } catch (pluginErr) {
+          logger.warn('Plugin onActionStart threw error', {
+            plugin: plugin.name,
+            error: pluginErr instanceof Error ? pluginErr.message : String(pluginErr),
+          });
+        }
+      }
+    }
+  }
 
   try {
     if (combinedSignal.aborted) {
@@ -186,11 +262,45 @@ export async function executeAction<
       lockCompleted = true;
     }
 
+    // Step 7a: Plugin Lifecycle onActionSuccess Hook
+    if (options.plugins) {
+      for (const plugin of options.plugins) {
+        if (plugin.onActionSuccess) {
+          try {
+            await plugin.onActionSuccess(genericAction, genericCtx, cleanedOutput);
+          } catch (pluginErr) {
+            logger.warn('Plugin onActionSuccess threw error', {
+              plugin: plugin.name,
+              error: pluginErr instanceof Error ? pluginErr.message : String(pluginErr),
+            });
+          }
+        }
+      }
+    }
+
     return cleanedOutput;
   } catch (err) {
     if (lockAcquired && !lockCompleted && idempotencyKey && options.idempotencyStore) {
       // Release lock on unhandled failure so subsequent retries are not blocked
       await options.idempotencyStore.release(action.name, idempotencyKey).catch(() => {});
+    }
+
+    const typedError = err instanceof Error ? err : new Error(String(err));
+
+    // Step 7b: Plugin Lifecycle onActionError Hook
+    if (options.plugins) {
+      for (const plugin of options.plugins) {
+        if (plugin.onActionError) {
+          try {
+            await plugin.onActionError(genericAction, genericCtx, typedError);
+          } catch (pluginErr) {
+            logger.warn('Plugin onActionError threw error', {
+              plugin: plugin.name,
+              error: pluginErr instanceof Error ? pluginErr.message : String(pluginErr),
+            });
+          }
+        }
+      }
     }
 
     if (err instanceof DomainError) {
@@ -219,6 +329,22 @@ export async function executeAction<
           logger.error('Error executing onFinally cleanup hook', {
             error: cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr),
           });
+        }
+      }
+    }
+
+    // Step 8a: Plugin Lifecycle onActionTeardown Hook
+    if (options.plugins) {
+      for (const plugin of options.plugins) {
+        if (plugin.onActionTeardown) {
+          try {
+            await plugin.onActionTeardown(genericAction, genericCtx);
+          } catch (pluginErr) {
+            logger.warn('Plugin onActionTeardown threw error', {
+              plugin: plugin.name,
+              error: pluginErr instanceof Error ? pluginErr.message : String(pluginErr),
+            });
+          }
         }
       }
     }
