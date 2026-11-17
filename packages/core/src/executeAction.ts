@@ -72,12 +72,24 @@ export async function executeAction<
   const { config, transport } = options;
   const headers = options.headers ?? {};
 
-  // Step 1: Correlation ID & Child Logger Setup
+  // Step 1: Correlation ID, W3C TraceContext & Child Logger Setup
   const headerName = config.observability.correlationIdHeader.toLowerCase();
   const rawCorrelationId = headers[headerName] ?? headers[config.observability.correlationIdHeader];
   const isValidCorrelationId =
     typeof rawCorrelationId === 'string' && /^[a-zA-Z0-9-_]{1,128}$/.test(rawCorrelationId);
   const requestId = isValidCorrelationId ? rawCorrelationId : crypto.randomUUID();
+
+  // W3C TraceContext extraction (traceparent: 00-{trace_id}-{span_id}-{flags})
+  let traceId: string | undefined;
+  let spanId: string | undefined;
+  const rawTraceparent = headers['traceparent'] ?? headers['Traceparent'];
+  if (typeof rawTraceparent === 'string') {
+    const tpParts = rawTraceparent.trim().split('-');
+    if (tpParts.length >= 4 && tpParts[0] === '00' && tpParts[1]?.length === 32) {
+      traceId = tpParts[1];
+      spanId = tpParts[2];
+    }
+  }
 
   const logger: ShukoiLogger = createShukoiLogger(config.observability, {
     requestId,
@@ -93,6 +105,7 @@ export async function executeAction<
     : timeoutSignal;
 
   // Step 3: Authentication & RBAC Scope Verification
+  const isAuthRequired = action.authRequired || action.auth?.required === true;
   let authResult: { user: Readonly<TUser> | null; scopes: ReadonlySet<string> };
   try {
     authResult = await resolveAuth<TUser>(
@@ -102,14 +115,14 @@ export async function executeAction<
       options.staticApiKeys as Readonly<Record<string, TUser>> | undefined,
     );
   } catch (authErr) {
-    if (action.authRequired) {
+    if (isAuthRequired) {
       throw authErr;
     }
     // If auth is not required by action, unverified/custom token falls back to anonymous user
     authResult = { user: null, scopes: Object.freeze(new Set<string>()) };
   }
 
-  if (action.authRequired && authResult.user === null) {
+  if (isAuthRequired && authResult.user === null) {
     throw new DomainError('UNAUTHORIZED', `Action "${action.name}" requires authentication`, 401);
   }
 
@@ -119,6 +132,41 @@ export async function executeAction<
       for (const scope of action.requiredScopes) {
         if (!authResult.scopes.has(scope)) {
           throw new DomainError('FORBIDDEN', `Missing required permission scope: "${scope}"`, 403);
+        }
+      }
+    }
+  }
+
+  // RBAC Roles verification from action.auth.roles
+  if (action.auth?.roles && action.auth.roles.length > 0) {
+    const userObj = authResult.user as Record<string, unknown> | null;
+    const userRoles = new Set<string>();
+    if (userObj) {
+      if (Array.isArray(userObj['roles'])) {
+        for (const r of userObj['roles']) {
+          userRoles.add(String(r));
+        }
+      } else if (typeof userObj['role'] === 'string') {
+        userRoles.add(userObj['role']);
+      }
+    }
+    const hasRole = userRoles.has('*') || action.auth.roles.some((r) => userRoles.has(r));
+    if (!hasRole) {
+      throw new DomainError(
+        'FORBIDDEN',
+        `Missing required role. Requires one of: ${action.auth.roles.join(', ')}`,
+        403,
+      );
+    }
+  }
+
+  // Granular Permissions verification from action.auth.permissions
+  if (action.auth?.permissions && action.auth.permissions.length > 0) {
+    const hasWildcard = authResult.scopes.has('*');
+    if (!hasWildcard) {
+      for (const perm of action.auth.permissions) {
+        if (!authResult.scopes.has(perm)) {
+          throw new DomainError('FORBIDDEN', `Missing required permission: "${perm}"`, 403);
         }
       }
     }
@@ -156,11 +204,28 @@ export async function executeAction<
     throw new DomainError('VALIDATION_ERROR', `Input validation failed: ${detail}`, 422, errors);
   }
 
+  // Step 5b: ABAC Policy Evaluation (Tenant & Ownership Guard)
+  if (action.auth?.policy) {
+    const policyGranted = await action.auth.policy(
+      {
+        user: authResult.user,
+        scopes: authResult.scopes,
+        headers: Object.freeze({ ...headers }),
+      },
+      sanitizedInput as Static<TInput>,
+    );
+    if (!policyGranted) {
+      throw new DomainError('FORBIDDEN', 'Access policy evaluation denied request', 403);
+    }
+  }
+
   // Step 6: Handler Invocation & Cleanup Hooks Collection
   const cleanupHooks: Array<() => Promise<void> | void> = [];
 
   const ctx: ActionExecutionContext<TUser, TPlatform, TServices> = Object.freeze({
     requestId,
+    traceId,
+    spanId,
     transport,
     signal: combinedSignal,
     user: authResult.user,

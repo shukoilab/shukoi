@@ -155,7 +155,17 @@ export async function resolveAuth<TUser = unknown>(
   if (rawApiKey && staticApiKeys) {
     for (const [validKey, userProfile] of Object.entries(staticApiKeys)) {
       if (await safeCompareSecrets(rawApiKey, validKey)) {
-        const scopes = new Set<string>(['*']);
+        let scopes: Set<string>;
+        if (
+          typeof userProfile === 'object' &&
+          userProfile !== null &&
+          'scopes' in userProfile &&
+          Array.isArray((userProfile as { scopes: unknown }).scopes)
+        ) {
+          scopes = new Set<string>((userProfile as { scopes: string[] }).scopes.map(String));
+        } else {
+          scopes = new Set<string>(['*']);
+        }
         return {
           user: userProfile as Readonly<TUser>,
           scopes: Object.freeze(scopes),

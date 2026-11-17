@@ -22,6 +22,8 @@ describe('Package License & NPM Metadata Integrity', () => {
     'selfhost',
     'store-redis',
     'ratelimit',
+    'otel',
+    'auth',
     'create-shukoi',
   ];
 

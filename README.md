@@ -152,6 +152,8 @@ Shukoi was architected from day one to enforce **Twelve Non-Negotiable Invariant
   - **AWS Lambda:** Dynamically computes `effectiveTimeoutMs = min(actionTimeout, remainingTime - lambdaDeadlineBufferMs)`. Aborts with 504 before AWS freezes the container, ensuring database transactions roll back cleanly.
 - 🔒 **Distributed Atomic Idempotency (`@shukoi/store-redis`):** Eliminates TOCTOU race conditions across multi-instance clusters via atomic Redis Lua scripts (`ACQUIRE_LUA`, `COMPLETE_LUA`, `RELEASE_LUA`). Ships dual runtimes: native TCP socket pool (`./node`) for Node/Bun and pure Web-fetch `UpstashRedisClient` (`./edge`) with zero `node:*` imports for Cloudflare Workers.
 - 🚦 **Universal Rate Limiting & DoS Defense (`@shukoi/ratelimit`):** Dual-algorithm engine featuring Sliding Window Counter (smooth, boundary burst-free) and Token Bucket (burst-tolerant for LLM token quotas). Emits standard IETF draft headers (`RateLimit-*`, `Retry-After`), integrates with RFC 9457 (429 Problem Details), and strictly caps in-memory fallback memory to $O(1)$ space via `BoundedLruCache(10000)`.
+- 🔭 **Native OpenTelemetry & Prometheus Metrics (`@shukoi/otel`):** W3C TraceContext distributed tracing plugin with zero-dependency Prometheus text exporter (`/metrics`), pure Web-standard OTLP/HTTP JSON exporter (`./edge`), and drop-oldest circular ring buffer guaranteeing $O(1)$ space ceiling without OOM crashes.
+- 🔐 **Enterprise Identity & Declarative RBAC/ABAC (`@shukoi/auth`):** Multi-strategy resolver (JWKS with stampede protection, hashed API keys with constant-time XOR comparison, HMAC-signed session cookies, and RFC 7662 OIDC introspection) with declarative action guards preventing BOLA/IDOR vulnerabilities.
 
 ---
 
@@ -175,6 +177,8 @@ npm create shukoi@latest my-service -- \
   --targets cloudflare,selfhost \
   --idempotency redis \
   --ratelimit redis \
+  --auth all \
+  --observability otel \
   --pm pnpm
 ```
 
@@ -200,6 +204,8 @@ Every scaffolded project includes:
 | **`@shukoi/selfhost`** | Bun/Node Server with Graceful Drain, OOM 413 defense (`getSelfHostContext`, probes, `./testing` mocks) | Permitted | Bun 1.2+ / Node 22+ |
 | **`@shukoi/store-redis`** | Distributed Redis Idempotency Store with atomic Lua scripts, dual runtime (`./node` and `./edge`), and in-memory mocks (`./testing`) | Allowed only in `./node` (Edge is pure Web fetch) | Node/Bun & Cloudflare Workers |
 | **`@shukoi/ratelimit`** | Universal Distributed Rate Limiter (Sliding Window & Token Bucket) with bounded LRU memory protection, IETF headers, and in-memory mocks (`./testing`) | **Forbidden** (Pure Web Standard) | All Runtimes |
+| **`@shukoi/otel`** | Enterprise OpenTelemetry Distributed Tracing & Prometheus Metrics plugin with bounded ring buffer ($O(1)$) and in-memory mocks (`./testing`) | **Forbidden** (Pure Web Standard) | All Runtimes |
+| **`@shukoi/auth`** | Enterprise Multi-Strategy Identity (JWKS, API Key, Session Cookie, OIDC) and declarative RBAC/ABAC guards with in-memory mocks (`./testing`) | **Forbidden** (Pure Web Standard) | All Runtimes |
 | **`create-shukoi`** | Interactive Clack & CI automation project scaffolder CLI | Permitted | Node 22+ / Bun |
 
 ---

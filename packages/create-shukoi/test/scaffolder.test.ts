@@ -166,6 +166,51 @@ describe('create-shukoi Scaffolder', () => {
     }
   });
 
+  it('scaffolds project with @shukoi/auth and @shukoi/otel when --auth and --observability flags are supplied', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'shukoi-test-q2-'));
+    const projectName = 'enterprise-service';
+
+    const parsed = parseCliArgs([
+      'enterprise-service',
+      '--products',
+      'api',
+      '--targets',
+      'selfhost',
+      '--auth',
+      'all',
+      '--observability',
+      'otel',
+      '--pm',
+      'pnpm',
+    ]);
+    expect(parsed.auth).toBe('all');
+    expect(parsed.observability).toBe('otel');
+
+    const { projectDir } = await scaffoldProject({
+      projectName,
+      targetDir: tmpDir,
+      products: ['api'],
+      targets: ['selfhost'],
+      packageManager: 'pnpm',
+      auth: 'all',
+      observability: 'otel',
+    });
+
+    const corePkgRaw = await fs.readFile(
+      new URL('../../core/package.json', import.meta.url),
+      'utf-8',
+    );
+    const { version: activeVersion } = JSON.parse(corePkgRaw);
+
+    const pkgContent = await fs.readFile(path.join(projectDir, 'package.json'), 'utf-8');
+    const pkg = JSON.parse(pkgContent);
+
+    expect(pkg.dependencies['@shukoi/auth']).toBe(`^${activeVersion}`);
+    expect(pkg.dependencies['@shukoi/otel']).toBe(`^${activeVersion}`);
+
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
   it('omits biome.json and skips @biomejs/biome when --no-linter is supplied', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'shukoi-test-no-linter-'));
     const projectName = 'no-linter-service';

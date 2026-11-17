@@ -12,6 +12,8 @@
       "@shukoi/selfhost",
       "@shukoi/store-redis",
       "@shukoi/ratelimit",
+      "@shukoi/otel",
+      "@shukoi/auth",
       "create-shukoi"
     ]
   ],

@@ -85,7 +85,7 @@ describe('CI/CD & Release Pipeline Integrity', () => {
 
   it('runs publint across core packages without errors', () => {
     const output = execSync(
-      'pnpm dlx publint packages/core packages/api packages/mcp packages/cloudflare packages/lambda packages/selfhost packages/store-redis packages/ratelimit',
+      'pnpm dlx publint packages/core packages/api packages/mcp packages/cloudflare packages/lambda packages/selfhost packages/store-redis packages/ratelimit packages/otel packages/auth',
       { encoding: 'utf-8', cwd: process.cwd() },
     );
     expect(output).not.toContain('Errors:');
@@ -115,11 +115,23 @@ describe('CI/CD & Release Pipeline Integrity', () => {
       { encoding: 'utf-8', cwd: process.cwd() },
     );
     expect(rateOutput).toContain('node16 (from ESM)');
+
+    const otelOutput = execSync(
+      'pnpm dlx @arethetypeswrong/cli --pack packages/otel --profile esm-only',
+      { encoding: 'utf-8', cwd: process.cwd() },
+    );
+    expect(otelOutput).toContain('node16 (from ESM)');
+
+    const authOutput = execSync(
+      'pnpm dlx @arethetypeswrong/cli --pack packages/auth --profile esm-only',
+      { encoding: 'utf-8', cwd: process.cwd() },
+    );
+    expect(authOutput).toContain('node16 (from ESM)');
   });
 
   it('runs esbuild browser bundling dry-run verifying zero node:* leakage on edge packages', () => {
     const output = execSync(
-      'pnpm dlx esbuild packages/core/dist/index.js packages/api/dist/index.js packages/mcp/dist/http.js packages/cloudflare/dist/index.js packages/store-redis/dist/edge.js packages/ratelimit/dist/index.js --bundle --platform=browser --format=esm --outdir=/tmp/test-edge-audit --external:hono --external:@sinclair/typebox --external:@modelcontextprotocol/sdk 2>&1',
+      'pnpm dlx esbuild packages/core/dist/index.js packages/api/dist/index.js packages/mcp/dist/http.js packages/cloudflare/dist/index.js packages/store-redis/dist/edge.js packages/ratelimit/dist/index.js packages/otel/dist/edge.js packages/auth/dist/index.js --bundle --platform=browser --format=esm --outdir=/tmp/test-edge-audit --external:hono --external:@sinclair/typebox --external:@modelcontextprotocol/sdk --external:jose 2>&1',
       { encoding: 'utf-8', cwd: process.cwd() },
     );
     expect(output).toContain('Done');

@@ -1,0 +1,61 @@
+{
+  "name": "@shukoi/auth",
+  "version": "1.0.3",
+  "description": "Enterprise multi-strategy authentication (JWKS, API Key, Session Cookie, OIDC) and declarative RBAC/ABAC authorization for Shukoi.",
+  "keywords": [
+    "shukoi",
+    "auth",
+    "authentication",
+    "authorization",
+    "rbac",
+    "abac",
+    "jwt",
+    "jwks",
+    "api-key",
+    "session",
+    "oidc"
+  ],
+  "license": "MIT",
+  "author": "shukoilab",
+  "homepage": "https://shukoilab.github.io/shukoi/",
+  "bugs": "https://github.com/shukoilab/shukoi/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shukoilab/shukoi.git",
+    "directory": "packages/auth"
+  },
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@shukoi/core": "workspace:*",
+    "jose": "^6.0.8"
+  },
+  "peerDependencies": {
+    "@shukoi/core": "^1.0.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

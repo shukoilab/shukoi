@@ -10,6 +10,8 @@
     { "path": "./packages/selfhost" },
     { "path": "./packages/store-redis" },
     { "path": "./packages/ratelimit" },
+    { "path": "./packages/otel" },
+    { "path": "./packages/auth" },
     { "path": "./packages/create-shukoi" }
   ]
 }

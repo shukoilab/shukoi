@@ -55,6 +55,8 @@ export interface ActionMcpConfig {
  */
 export interface ActionExecutionContext<TUser = unknown, TPlatform = unknown, TServices = unknown> {
   readonly requestId: string;
+  readonly traceId?: string | undefined;
+  readonly spanId?: string | undefined;
   readonly transport: 'rest' | 'mcp-http' | 'mcp-stdio' | 'test';
   readonly signal: AbortSignal;
   readonly user: Readonly<TUser> | null;
@@ -70,6 +72,30 @@ export interface ActionExecutionContext<TUser = unknown, TPlatform = unknown, TS
     handler: (txServices: Readonly<TServices>) => Promise<TResult>,
     options?: { readonly timeoutMs?: number | undefined },
   ): Promise<TResult>;
+}
+
+/**
+ * @purpose Declarative fine-grained authorization configuration (RBAC & ABAC).
+ * @rationale Enables declarative security policies at action declaration, preventing BOLA/IDOR vulnerabilities.
+ * @preconditions None.
+ * @param context Caller identity and permission context.
+ * @param input Validated action input payload.
+ * @returns Boolean or promise resolving to true if authorization is granted.
+ * @throws Never throws directly; policy evaluation errors propagate to caller.
+ * @invariants Pure interface definition; immutable.
+ */
+export interface ActionAuthConfig<TUser = unknown, TInput = unknown> {
+  readonly required?: boolean | undefined;
+  readonly roles?: readonly string[] | undefined;
+  readonly permissions?: readonly string[] | undefined;
+  policy?(
+    context: Readonly<{
+      user: Readonly<TUser> | null;
+      scopes: ReadonlySet<string>;
+      headers: Readonly<Record<string, string>>;
+    }>,
+    input: Readonly<TInput>,
+  ): Promise<boolean> | boolean;
 }
 
 /**
@@ -90,6 +116,7 @@ export interface ActionDefinition<
   readonly tags?: readonly string[] | undefined;
   readonly deprecated?: boolean | undefined;
   readonly authRequired: boolean;
+  readonly auth?: ActionAuthConfig<TUser, Static<TInput>> | undefined;
   readonly requiredScopes?: readonly string[] | undefined;
   readonly timeoutMs?: number | undefined;
   readonly http?: ActionHttpConfig | undefined;

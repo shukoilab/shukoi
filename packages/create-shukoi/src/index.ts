@@ -15,6 +15,8 @@ export type ShukoiTarget = 'cloudflare' | 'lambda' | 'selfhost';
 export type PackageManager = 'pnpm' | 'npm' | 'bun';
 export type IdempotencyOption = 'memory' | 'redis' | 'none';
 export type RateLimitOption = 'memory' | 'redis' | 'none';
+export type AuthOption = 'jwks' | 'api-key' | 'session' | 'all' | 'none';
+export type ObservabilityOption = 'otel' | 'prometheus' | 'none';
 
 /**
  * @purpose Configuration options for scaffolding a new Shukoi project.
@@ -30,6 +32,8 @@ export interface ScaffoldOptions {
   readonly includeLinter?: boolean | undefined;
   readonly idempotency?: IdempotencyOption | undefined;
   readonly ratelimit?: RateLimitOption | undefined;
+  readonly auth?: AuthOption | undefined;
+  readonly observability?: ObservabilityOption | undefined;
 }
 
 /**
@@ -50,6 +54,8 @@ export function parseCliArgs(argv: readonly string[]): Partial<ScaffoldOptions> 
     includeLinter?: boolean;
     idempotency?: IdempotencyOption;
     ratelimit?: RateLimitOption;
+    auth?: AuthOption;
+    observability?: ObservabilityOption;
   } = {};
 
   for (let i = 0; i < argv.length; i++) {
@@ -93,6 +99,16 @@ export function parseCliArgs(argv: readonly string[]): Partial<ScaffoldOptions> 
       i++;
     } else if (arg.startsWith('--ratelimit=')) {
       result.ratelimit = arg.slice(12).trim() as RateLimitOption;
+    } else if (arg === '--auth' && argv[i + 1]) {
+      result.auth = argv[i + 1]?.trim() as AuthOption;
+      i++;
+    } else if (arg.startsWith('--auth=')) {
+      result.auth = arg.slice(7).trim() as AuthOption;
+    } else if (arg === '--observability' && argv[i + 1]) {
+      result.observability = argv[i + 1]?.trim() as ObservabilityOption;
+      i++;
+    } else if (arg.startsWith('--observability=')) {
+      result.observability = arg.slice(16).trim() as ObservabilityOption;
     } else if (!arg.startsWith('-') && !result.projectName) {
       result.projectName = arg;
     }
@@ -178,6 +194,14 @@ export async function scaffoldProject(
 
   if (options.ratelimit === 'redis' || options.ratelimit === 'memory') {
     dependencies['@shukoi/ratelimit'] = '^1.0.3';
+  }
+
+  if (options.auth && options.auth !== 'none') {
+    dependencies['@shukoi/auth'] = '^1.0.3';
+  }
+
+  if (options.observability === 'otel' || options.observability === 'prometheus') {
+    dependencies['@shukoi/otel'] = '^1.0.3';
   }
 
   const scripts: Record<string, string> = {

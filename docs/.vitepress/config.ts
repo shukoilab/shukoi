@@ -77,6 +77,14 @@ export default defineConfig({
             { text: 'Rate Limiting & Quotas', link: '/guide/rate-limiting' },
           ],
         },
+        {
+          text: 'Security & Observability',
+          items: [
+            { text: 'Enterprise Authentication', link: '/guide/authentication' },
+            { text: 'RBAC & ABAC Authorization', link: '/guide/authorization-rbac' },
+            { text: 'OpenTelemetry & Metrics', link: '/guide/observability-otel' },
+          ],
+        },
       ],
       '/protocols/': [
         {

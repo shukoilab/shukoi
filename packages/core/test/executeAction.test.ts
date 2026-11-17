@@ -287,4 +287,130 @@ describe('executeAction Pipeline', () => {
       harness.execute(action, { shouldFail: false }, { signal: controller.signal }),
     ).rejects.toThrow(DomainError);
   });
+
+  it('extracts W3C traceparent into ctx.traceId and ctx.spanId', async () => {
+    let capturedTraceId: string | undefined;
+    let capturedSpanId: string | undefined;
+
+    const action = defineAction({
+      name: 'traceAction',
+      description: 'Tests traceparent extraction',
+      authRequired: false,
+      input: Type.Object({}),
+      output: Type.Object({ ok: Type.Boolean() }),
+      async handler(_input, ctx) {
+        capturedTraceId = ctx.traceId;
+        capturedSpanId = ctx.spanId;
+        return { ok: true };
+      },
+    });
+
+    const headers = {
+      traceparent: '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
+    };
+
+    const res = await harness.execute(action, {}, { headers });
+    expect(res.ok).toBe(true);
+    expect(capturedTraceId).toBe('4bf92f3577b34da6a3ce929d0e0e4736');
+    expect(capturedSpanId).toBe('00f067aa0ba902b7');
+  });
+
+  it('evaluates declarative action.auth RBAC roles and permissions', async () => {
+    const adminAction = defineAction({
+      name: 'adminAction',
+      description: 'Requires admin role and billing:write permission',
+      authRequired: true,
+      auth: {
+        roles: ['admin', 'superadmin'],
+        permissions: ['billing:write'],
+      },
+      input: Type.Object({}),
+      output: Type.Object({ ok: Type.Boolean() }),
+      async handler() {
+        return { ok: true };
+      },
+    });
+
+    // 1. Missing role
+    const nonAdminUser = { id: 'u1', roles: ['viewer'], scopes: ['billing:write'] };
+    await expect(
+      harness.execute(
+        adminAction,
+        {},
+        {
+          headers: { 'x-api-key': 'valid_key' },
+          staticApiKeys: { valid_key: nonAdminUser },
+        },
+      ),
+    ).rejects.toThrow(DomainError);
+
+    // 2. Has role, but missing permission
+    const adminNoPerm = { id: 'u2', roles: ['admin'], scopes: ['billing:read'] };
+    await expect(
+      harness.execute(
+        adminAction,
+        {},
+        {
+          headers: { 'x-api-key': 'valid_key' },
+          staticApiKeys: { valid_key: adminNoPerm },
+        },
+      ),
+    ).rejects.toThrow(DomainError);
+
+    // 3. Has role and permission via wildcard
+    const superAdmin = { id: 'u3', roles: ['superadmin'], scopes: ['*'] };
+    const res = await harness.execute(
+      adminAction,
+      {},
+      {
+        headers: { 'x-api-key': 'valid_key' },
+        staticApiKeys: { valid_key: superAdmin },
+      },
+    );
+    expect(res.ok).toBe(true);
+  });
+
+  it('evaluates declarative action.auth.policy ABAC guard preventing BOLA/IDOR', async () => {
+    const tenantAction = defineAction({
+      name: 'tenantAction',
+      description: 'Enforces tenant boundary policy',
+      authRequired: true,
+      auth: {
+        policy: (ctx, input) => {
+          const user = ctx.user as { tenantId?: string } | null;
+          return user?.tenantId === input.tenantId;
+        },
+      },
+      input: Type.Object({ tenantId: Type.String() }),
+      output: Type.Object({ ok: Type.Boolean() }),
+      async handler() {
+        return { ok: true };
+      },
+    });
+
+    const userTenantA = { id: 'u1', tenantId: 'tenant_alpha' };
+
+    // 1. User tenant_alpha tries to access tenant_beta -> 403 FORBIDDEN
+    await expect(
+      harness.execute(
+        tenantAction,
+        { tenantId: 'tenant_beta' },
+        {
+          headers: { 'x-api-key': 'valid_key' },
+          staticApiKeys: { valid_key: userTenantA },
+        },
+      ),
+    ).rejects.toThrow(DomainError);
+
+    // 2. User tenant_alpha accesses tenant_alpha -> 200 OK
+    const res = await harness.execute(
+      tenantAction,
+      { tenantId: 'tenant_alpha' },
+      {
+        headers: { 'x-api-key': 'valid_key' },
+        staticApiKeys: { valid_key: userTenantA },
+      },
+    );
+    expect(res.ok).toBe(true);
+  });
 });

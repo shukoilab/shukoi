@@ -1,0 +1,66 @@
+{
+  "name": "@shukoi/otel",
+  "version": "1.0.3",
+  "description": "Enterprise OpenTelemetry distributed tracing and Prometheus metrics plugin for Shukoi.",
+  "keywords": [
+    "shukoi",
+    "opentelemetry",
+    "otel",
+    "tracing",
+    "metrics",
+    "prometheus",
+    "w3c",
+    "edge",
+    "observability"
+  ],
+  "license": "MIT",
+  "author": "shukoilab",
+  "homepage": "https://shukoilab.github.io/shukoi/",
+  "bugs": "https://github.com/shukoilab/shukoi/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shukoilab/shukoi.git",
+    "directory": "packages/otel"
+  },
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./prometheus": {
+      "types": "./dist/prometheus.d.ts",
+      "import": "./dist/prometheus.js"
+    },
+    "./edge": {
+      "types": "./dist/edge.d.ts",
+      "import": "./dist/edge.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@shukoi/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@shukoi/core": "^1.0.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}
