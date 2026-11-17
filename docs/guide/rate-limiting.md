@@ -19,13 +19,14 @@ High-throughput REST APIs and AI Agent services (such as Model Context Protocol 
 
 ## 2. Standard IETF & RFC 9457 Headers
 
-Every evaluated request receives standard IETF draft rate limit headers:
+Every evaluated request receives standard IETF Draft-08 rate limit headers:
 
 ```http
 HTTP/1.1 200 OK
 RateLimit-Limit: 100
 RateLimit-Remaining: 94
 RateLimit-Reset: 14
+RateLimit-Policy: 100;w=60
 ```
 
 When an identifier exceeds its allocated quota, Shukoi halts execution and returns an HTTP `429 Too Many Requests` envelope adhering to **RFC 9457 (Problem Details for HTTP APIs)**:
@@ -36,6 +37,7 @@ Content-Type: application/problem+json
 RateLimit-Limit: 100
 RateLimit-Remaining: 0
 RateLimit-Reset: 14
+RateLimit-Policy: 100;w=60
 Retry-After: 14
 
 {
@@ -53,9 +55,9 @@ Retry-After: 14
 
 1. **In-Memory Bounded LRU (`BoundedLruCache`):**
    - Ideal for single-instance Node/Bun servers and automated unit tests.
-   - Enforces a strict maximum capacity (`maxItems: 10_000`) with auto-eviction of oldest entries, guaranteeing that memory consumption is strictly $O(1)$ even under millions of distinct attacking IPs.
+   - Enforces a strict maximum capacity (`maxMemoryEntries: 10_000`) with auto-eviction of oldest entries, guaranteeing that memory consumption is strictly $O(1)$ even under millions of distinct attacking IPs.
 2. **Distributed Redis Backend:**
-   - Evaluates rate limiting in a single atomic Lua script call inside Redis.
+   - Evaluates rate limiting in a single atomic Lua script call inside Redis (`SLIDING_WINDOW_LUA` with batch unpacked `ZADD` or `TOKEN_BUCKET_LUA` in a Redis Hash).
    - Eliminates race conditions across multiple serverless functions or container replicas.
 
 ---
@@ -72,6 +74,7 @@ const limiter = createRateLimiter({
   algorithm: slidingWindow({
     limit: 100,
     windowMs: 60_000,
+    maxMemoryEntries: 10_000,
   }),
 });
 
@@ -80,15 +83,18 @@ const clientIp = req.headers['x-forwarded-for'] || '127.0.0.1';
 const decision = await limiter.limit(`ip:${clientIp}`);
 
 if (!decision.success) {
-  const headers = limiter.getHeaders(decision);
-  // Returns 429 with headers['Retry-After']
+  const headers = limiter.getHeaders(decision, 60);
+  return new Response('Rate limit exceeded', { status: 429, headers });
 }
 ```
 
 ### Example 2: Distributed Redis Sliding Window
 
+When connecting to Redis, normalize standard drivers (`ioredis` or `node-redis`) to Shukoi's `RateLimitRedisClient` contract via `wrapRedisClient()`:
+
 ```typescript
 import { createRateLimiter, slidingWindow } from '@shukoi/ratelimit';
+import { wrapRedisClient } from '@shukoi/store-redis';
 import Redis from 'ioredis';
 
 const redis = new Redis(process.env.REDIS_URL!);
@@ -97,23 +103,29 @@ const distributedLimiter = createRateLimiter({
   algorithm: slidingWindow({
     limit: 1000,
     windowMs: 60_000,
-    client: redis,
+    client: wrapRedisClient(redis),
   }),
 });
 ```
 
-### Example 3: Token Bucket for AI Agent LLM Tokens
+### Example 3: Token Bucket for AI Agent LLM Tokens (In-Memory & Distributed Redis)
 
 ```typescript
 import { createRateLimiter, tokenBucket } from '@shukoi/ratelimit';
+import { wrapRedisClient } from '@shukoi/store-redis';
+import Redis from 'ioredis';
 
-// Allow burst up to 50,000 tokens, replenishing at 5,000 tokens per second
+const redis = new Redis(process.env.REDIS_URL!);
+
+// Allow burst up to 50,000 tokens, replenishing at 5,000 tokens per second across Redis cluster
 const llmLimiter = createRateLimiter({
   algorithm: tokenBucket({
     capacity: 50_000,
     refillRate: 5_000,
     intervalMs: 1_000,
+    client: wrapRedisClient(redis),
   }),
+  keyPrefix: 'rate:llm:',
 });
 
 // Deduct estimated token cost before invoking LLM:

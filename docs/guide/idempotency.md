@@ -46,24 +46,27 @@ When an action declares `http: { requireIdempotencyKey: true }`, Shukoi's 8-step
 pnpm add @shukoi/store-redis @shukoi/core
 ```
 
-### Option A: Persistent Node.js / Bun Containers (ioredis)
+### Option A: Persistent Node.js / Bun Containers (ioredis & node-redis)
 
-In long-running servers, connect using standard TCP socket clients:
+In long-running servers, connect using standard TCP socket clients normalized via `wrapRedisClient()`:
 
 ```typescript
 import { createRestRouter } from '@shukoi/api';
 import { createSelfHostServer } from '@shukoi/selfhost';
-import { createRedisIdempotencyStore } from '@shukoi/store-redis/node';
+import { createRedisIdempotencyStore, wrapRedisClient } from '@shukoi/store-redis/node';
 import Redis from 'ioredis';
 import { orderAction } from './actions/order.js';
 import { config } from './config.js';
 
-const redisClient = new Redis(process.env.REDIS_URL!);
+const redisClient = new Redis(process.env.REDIS_URL!, {
+  maxRetriesPerRequest: 3,
+  commandTimeout: 5000,
+});
 
 const idempotencyStore = createRedisIdempotencyStore({
-  client: redisClient,
+  client: wrapRedisClient(redisClient),
   keyPrefix: 'app:idemp:',
-  defaultLockTtlMs: 30_000,      // Lock expires in 30s if worker crashes
+  defaultLockTtlMs: 30_000,          // Lock expires in 30s if worker crashes
   defaultRetentionTtlMs: 86_400_000, // Retain completed response for 24 hours
 });
 
@@ -77,21 +80,40 @@ Edge runtimes cannot open raw TCP sockets without special socket flags. Use `@sh
 
 ```typescript
 import { createRestRouter } from '@shukoi/api';
-import { toCloudflareWorker } from '@shukoi/cloudflare';
+import { toCloudflareWorker, getCloudflareContext } from '@shukoi/cloudflare';
 import { createRedisIdempotencyStore, UpstashRedisClient } from '@shukoi/store-redis/edge';
 import { orderAction } from './actions/order.js';
 import { config } from './config.js';
 
-export default toCloudflareWorker((env) => {
-  const idempotencyStore = createRedisIdempotencyStore({
-    client: new UpstashRedisClient({
-      url: env.UPSTASH_REDIS_REST_URL,
-      token: env.UPSTASH_REDIS_REST_TOKEN,
-    }),
-  });
+// Define the REST router
+export const app = createRestRouter([orderAction], config);
 
-  return createRestRouter([orderAction], config, { idempotencyStore });
-});
+// Export worker entrypoint with toCloudflareWorker(app)
+export default toCloudflareWorker(app);
+```
+
+> **Upstash Note:** When using the official `@upstash/redis` client instead of `UpstashRedisClient`, instantiate it with `{ automaticDeserialization: false }` to prevent double-deserialization issues with cached idempotency records.
+
+---
+
+### Heartbeat Lock Extension (`extendLock`)
+
+For long-running background tasks or asynchronous processing, workers can periodically renew their active in-progress lock before it expires:
+
+```typescript
+// Background heartbeat renewing lock TTL every 10 seconds
+const heartbeat = setInterval(async () => {
+  const renewed = await idempotencyStore.extendLock('createPayment', idempotencyKey, 30_000);
+  if (!renewed) {
+    clearInterval(heartbeat);
+  }
+}, 10_000);
+
+try {
+  await processPayment();
+} finally {
+  clearInterval(heartbeat);
+}
 ```
 
 ---

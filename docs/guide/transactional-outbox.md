@@ -24,7 +24,8 @@ CREATE TABLE shukoi_outbox_events (
   retry_count INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   locked_until TIMESTAMP NULL,
-  published_at TIMESTAMP NULL
+  published_at TIMESTAMP NULL,
+  error TEXT NULL
 );
 
 CREATE INDEX idx_shukoi_outbox_poll 
@@ -34,7 +35,7 @@ ON shukoi_outbox_events (status, locked_until, created_at);
 ### Drizzle ORM Table Schema Definition
 
 ```typescript
-import { index, integer, json, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core';
+import { index, integer, json, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
 
 export const shukoiOutboxEvents = pgTable(
   'shukoi_outbox_events',
@@ -50,6 +51,7 @@ export const shukoiOutboxEvents = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
     lockedUntil: timestamp('locked_until'),
     publishedAt: timestamp('published_at'),
+    error: text('error'),
   },
   (table) => [
     index('idx_shukoi_outbox_poll').on(table.status, table.lockedUntil, table.createdAt),
@@ -74,6 +76,7 @@ export interface ShukoiOutboxTable {
   created_at: Generated<Date>;
   locked_until: ColumnType<Date | null, Date | null, Date | null>;
   published_at: ColumnType<Date | null, Date | null, Date | null>;
+  error: string | null;
 }
 ```
 

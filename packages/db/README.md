@@ -1,18 +1,23 @@
 # @shukoi/db
 
-> **Universal Modular Database & Transaction Engine with Pluggable 3rd-Party ORM Adapters for Shukoi.**
+> **Universal Modular Database & Transaction Engine with Pluggable 3rd-Party ORM Adapters for Shukoi**
 
-`@shukoi/db` provides a vendor-agnostic database transaction engine and transactional outbox for Shukoi applications. It enables developers to plug in their preferred ORM or query builder (Drizzle, Kysely, Prisma, or Cloudflare D1) while guaranteeing atomic transactions, composite cancellation rollbacks, and zero connection leaks.
+[![npm version](https://img.shields.io/npm/v/@shukoi/db.svg)](https://www.npmjs.com/package/@shukoi/db)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+`@shukoi/db` provides a vendor-agnostic database transaction engine and transactional outbox for Shukoi applications. It enables developers to plug in their preferred ORM or query builder (Drizzle, Kysely, Prisma, or Cloudflare D1) while guaranteeing atomic transactions, ANSI isolation levels, composite cancellation rollbacks, and zero connection leaks.
 
 ---
 
-## Features
+## Key Features & Invariants
 
-- 🔌 **Pluggable ORM Adapters:** First-class adapters for Drizzle ORM (`./drizzle`), Kysely (`./kysely`), Prisma (`./prisma`), and Cloudflare D1 (`./d1`).
+- 🔌 **Pluggable ORM Adapters:** First-class modular subpaths for Drizzle ORM (`./drizzle`), Kysely (`./kysely`), Prisma (`./prisma`), and Cloudflare D1 (`./d1`).
+- 🔒 **Universal ANSI SQL Isolation Levels:** Passes `isolationLevel` ('read uncommitted', 'read committed', 'repeatable read', 'serializable', 'snapshot') through `TransactionOptions` to Drizzle, Kysely, and Prisma.
+- ⚡ **Native Cloudflare D1 Atomic Batching:** Exposes `D1DatabaseAdapter.batch()` directly for atomic multi-statement execution in Cloudflare Workers V8 Isolates.
 - 🛑 **Composite Cancellation & Auto-Rollback:** Automatically rolls back active database transactions when clients disconnect or timeouts trigger, freeing row locks instantly.
-- 📬 **Transactional Outbox Engine:** Eliminates dual-write inconsistencies by writing domain state changes and outbox events in the same atomic transaction.
+- 📬 **Transactional Outbox Engine:** Eliminates dual-write inconsistencies by persisting domain state changes and outbox events in the same atomic transaction.
 - 🌊 **Graceful Drain State Machine:** In long-running servers, gracefully drains in-flight queries upon `SIGTERM`/`SIGINT` before closing connection pools, preventing zombie connections.
-- 🌐 **Zero `node:*` Imports in `./d1`:** Native Cloudflare D1 adapter runs cleanly in V8 Isolates with pure Web standards.
+- 🌐 **Pure Web Standards in `./d1`:** Native Cloudflare D1 adapter runs cleanly in V8 Isolates with zero `node:*` imports.
 - 🧪 **Deterministic In-Memory Double:** Includes `MockDatabaseAdapter` and `MockOutboxStore` in `@shukoi/db/testing` for ultra-fast unit testing.
 
 ---
@@ -28,9 +33,11 @@ Install your chosen ORM or database driver:
 ```bash
 # Option A: Drizzle ORM
 pnpm add drizzle-orm pg
+pnpm add -D @types/pg
 
 # Option B: Kysely Query Builder
 pnpm add kysely pg
+pnpm add -D @types/pg
 
 # Option C: Prisma Client
 pnpm add @prisma/client
@@ -38,17 +45,14 @@ pnpm add @prisma/client
 
 ---
 
-## Usage
+## Driver Setup & Adapter Configuration
 
-### 1. Connecting Drizzle ORM to Shukoi
+### 1. Drizzle ORM Setup
 
 ```typescript
-import { createRestRouter } from '@shukoi/api';
 import { createDrizzleAdapter } from '@shukoi/db/drizzle';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
-import { orderAction } from './actions/order.js';
-import { config } from './config.js';
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const db = drizzle(pool);
@@ -57,14 +61,63 @@ export const dbAdapter = createDrizzleAdapter(db, {
   system: 'postgresql',
   onClose: () => pool.end(),
 });
+```
 
-export const app = createRestRouter([orderAction], config, {
-  transactionProvider: dbAdapter.transaction,
-  services: { db: dbAdapter.client },
+### 2. Kysely Setup
+
+```typescript
+import { createKyselyAdapter } from '@shukoi/db/kysely';
+import { Kysely, PostgresDialect } from 'kysely';
+import pg from 'pg';
+
+const db = new Kysely<Database>({
+  dialect: new PostgresDialect({
+    pool: new pg.Pool({ connectionString: process.env.DATABASE_URL }),
+  }),
+});
+
+export const dbAdapter = createKyselyAdapter(db, {
+  system: 'postgresql',
+  onClose: () => db.destroy(),
 });
 ```
 
-### 2. Using Transactions Inside Actions
+### 3. Prisma Client Setup
+
+```typescript
+import { createPrismaAdapter } from '@shukoi/db/prisma';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+export const dbAdapter = createPrismaAdapter(prisma, {
+  system: 'postgresql',
+  maxWaitMs: 5000,
+  timeoutMs: 10000,
+  onClose: () => prisma.$disconnect(),
+});
+```
+
+### 4. Cloudflare D1 Setup
+
+```typescript
+import { createD1Adapter } from '@shukoi/db/d1';
+
+export default {
+  async fetch(request, env) {
+    const dbAdapter = createD1Adapter(env.DB);
+    // Use dbAdapter.batch() for atomic multi-statement mutations
+  },
+};
+```
+
+> **Cloudflare D1 Transaction Architecture Note:** Cloudflare D1 manages transactions automatically via `db.batch()`. Manual `BEGIN TRANSACTION` / `COMMIT` statements are rejected by D1. Multi-statement atomic mutations must use `dbAdapter.batch([stmt1, stmt2])` to guarantee all-or-nothing execution.
+
+---
+
+## Using Transactions Inside Actions
+
+Action handlers interact with database transactions via `ctx.transaction()`:
 
 ```typescript
 import { defineAction, DomainError } from '@shukoi/core';
@@ -80,7 +133,6 @@ export const createOrderAction = defineAction({
     return await ctx.transaction(async (txServices) => {
       const { db } = txServices;
 
-      // Execute queries inside atomic transaction:
       const order = await db.insertOrder(input);
       if (!order) {
         throw new DomainError('CONFLICT', 'Insufficient stock', 409);
@@ -94,6 +146,73 @@ export const createOrderAction = defineAction({
 
 ---
 
-## License
+## Transaction Isolation Levels
 
-MIT © [shukoilab](https://github.com/shukoilab)
+`TransactionOptions` supports ANSI SQL isolation levels:
+
+```typescript
+await dbAdapter.transaction(
+  async (tx) => {
+    // Queries execute under serializable isolation
+  },
+  {
+    isolationLevel: 'serializable',
+    timeoutMs: 5000,
+  },
+);
+```
+
+### Dialect Support Matrix
+
+| Isolation Level      |     PostgreSQL      |        MySQL        |     SQLite / D1     |
+| :------------------- | :-----------------: | :-----------------: | :-----------------: |
+| `'read uncommitted'` |      Supported      |      Supported      |    Not Supported    |
+| `'read committed'`   | Supported (Default) |      Supported      |    Not Supported    |
+| `'repeatable read'`  |      Supported      | Supported (Default) |    Not Supported    |
+| `'serializable'`     |      Supported      |      Supported      | Supported (Default) |
+| `'snapshot'`         |      Supported      |    Not Supported    |    Not Supported    |
+
+---
+
+## Transactional Outbox Pattern
+
+Eliminate dual-write inconsistencies between domain writes and event publishing:
+
+```typescript
+import { TransactionalOutbox } from '@shukoi/db';
+
+const outbox = new TransactionalOutbox(outboxStore);
+
+await dbAdapter.transaction(async (tx) => {
+  // 1. Mutate domain state
+  await tx.insert(orders).values(newOrder);
+
+  // 2. Enqueue event in the same atomic transaction
+  await outbox.enqueue(tx, {
+    aggregateType: 'Order',
+    aggregateId: newOrder.id,
+    eventType: 'OrderCreated',
+    payload: { orderId: newOrder.id, total: newOrder.total },
+  });
+});
+```
+
+---
+
+## Testing Without a Database
+
+Use `@shukoi/db/testing` for zero-network assertions in unit tests:
+
+```typescript
+import { MockDatabaseAdapter, MockOutboxStore } from '@shukoi/db/testing';
+
+const mockDb = new MockDatabaseAdapter({ system: 'postgresql' });
+const mockOutbox = new MockOutboxStore();
+
+await mockDb.transaction(async (tx) => {
+  // Run test actions
+});
+
+expect(mockDb.getCommitCount()).toBe(1);
+expect(mockDb.getRollbackCount()).toBe(0);
+```

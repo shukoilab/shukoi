@@ -54,10 +54,10 @@ export const updateInvoiceAction = defineAction({
 
 | Condition | HTTP Status | Error Code | Detail Message |
 | :--- | :--- | :--- | :--- |
-| **Missing / Expired Credentials** | `401 Unauthorized` | `UNAUTHORIZED` | "Authentication is required for this action" |
-| **Missing Required Role** | `403 Forbidden` | `FORBIDDEN` | "Insufficient role privileges. Requires one of: admin, billing_manager" |
-| **Missing Permission Scope** | `403 Forbidden` | `FORBIDDEN` | "Missing required permission: invoices:write" |
-| **ABAC Policy Denied (BOLA/IDOR)** | `403 Forbidden` | `FORBIDDEN` | "Access policy evaluation denied request" |
+| **Missing / Expired Credentials** | `401 Unauthorized` | `UNAUTHORIZED` | `Action "<actionName>" requires authentication` |
+| **Missing Required Role** | `403 Forbidden` | `FORBIDDEN` | `Missing required role. Requires one of: <roles>` |
+| **Missing Permission Scope** | `403 Forbidden` | `FORBIDDEN` | `Missing required permission: "<permission>"` |
+| **ABAC Policy Denied (BOLA/IDOR)** | `403 Forbidden` | `FORBIDDEN` | `Access policy evaluation denied request` |
 
 ---
 

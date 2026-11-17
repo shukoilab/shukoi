@@ -110,6 +110,55 @@ Starts local STDIO MCP server with pure stdin readline, console hijacking to std
 
 ---
 
+### 3.5 Distributed Resilience, Observability, Identity & Database Packages
+
+#### @shukoi/store-redis
+- `createRedisIdempotencyStore(options: RedisStoreOptions): RedisIdempotencyStore`: Constructs distributed idempotency store backed by atomic Lua scripts. Options: `client`, `keyPrefix` (default `'shukoi:idemp:'`), `defaultLockTtlMs` (default `30000`), `defaultRetentionTtlMs` (default `86400000`).
+- `wrapRedisClient(client: unknown): RedisClient`: Multi-driver normalizer adapting `ioredis` (positional args), `node-redis` (v4/v5 options object), and `@upstash/redis` to Shukoi's standard `eval(script, keys, args)` contract.
+- `store.tryAcquire(actionName, key, ttlMs?)`: Claims lock atomically; returns `{ acquired: boolean, record? }` or throws 409 Conflict if in-progress.
+- `store.complete(actionName, key, payload, ttlMs?)`: Marks status as COMPLETED and caches payload for subsequent replay.
+- `store.extendLock(actionName, key, additionalTtlMs?)`: Heartbeat renewal extending active lock TTL for long-running workflows.
+- `store.release(actionName, key)`: Releases in-progress lock upon failure, allowing immediate client retry.
+- Scripts: `ACQUIRE_LUA`, `COMPLETE_LUA`, `RELEASE_LUA`, `EXTEND_LUA` with safe `pcall(cjson.decode)` parsing.
+- Edge: `UpstashRedisClient` (`@shukoi/store-redis/edge`) using Web-standard `fetch` with 0 `node:*` imports.
+- Testing: `MockRedisClient` (`@shukoi/store-redis/testing`).
+
+#### @shukoi/ratelimit
+- `createRateLimiter(config: RateLimiterConfig): RateLimiter`: Constructs rate limiter with chosen algorithm.
+- `slidingWindow(options: SlidingWindowOptions)`: Exact timestamped sliding window counter using Redis Sorted Sets (`ZSET`) with batch unpacked `ZADD` or in-memory `BoundedLruCache(10000)`.
+- `tokenBucket(options: TokenBucketOptions)`: Continuous replenishment token bucket using Redis Hashes (`HMGET`/`HSET`) via `TOKEN_BUCKET_LUA` or in-memory `BoundedLruCache(10000)`. Options: `capacity`, `refillRate`, `intervalMs`, `client?`, `maxMemoryEntries?`.
+- `limiter.limit(identifier, cost = 1)`: Returns `RateLimitResult` (`success`, `limit`, `remaining`, `resetMs`, `retryAfter`).
+- `limiter.assert(identifier, cost = 1)`: Evaluates rate limit; throws `DomainError('RATE_LIMIT_EXCEEDED', ..., 429)` if breached.
+- `limiter.getHeaders(result, policyWindowSec?)`: Emits standard IETF Draft-08 headers (`RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, `RateLimit-Policy: <limit>;w=<windowSec>`, conditional `Retry-After`).
+- Testing: `MockRateLimitRedisClient` (`@shukoi/ratelimit/testing`).
+
+#### @shukoi/otel
+- `createOpenTelemetryPlugin(config: OpenTelemetryPluginConfig)`: ShukoiPlugin instrumenting actions with W3C TraceContext child spans, duration metrics, and drop-oldest ring buffer queue (`maxQueueSize: 2048`, `batchSize: 512`).
+- `OtlpHttpSpanExporter`: Web-standard OTLP 1.34+ compliant exporter (`@shukoi/otel/edge`) emitting `service.name` under `resource.attributes`. Options: `endpoint`, `serviceName`, `resourceAttributes`, `headers`, `timeoutMs`.
+- `PrometheusRegistry`: Prometheus text exposition generator (`@shukoi/otel/prometheus`) grouping metric series contiguously by metric family with label value newline escaping. Scraped via `registry.scrape()`.
+- `SpanKind`: Union `'INTERNAL' | 'SERVER' | 'CLIENT' | 'PRODUCER' | 'CONSUMER'`.
+- `span.recordException(error)`: Logs semantic OpenTelemetry exception events (`exception.type`, `exception.message`, `exception.stacktrace`) and sets span status to ERROR.
+- Testing: `MockSpanExporter`, `MockMetricReader` (`@shukoi/otel/testing`).
+
+#### @shukoi/auth
+- `createCompositeAuthResolver(strategies)`: Chains authentication strategies in priority order, returning `{ user, scopes, token? }`.
+- `createJwksStrategy(config)`: Validates JWT Bearer tokens with Single-Flight stampede protection and cached `createLocalJWKSet` keystores. Options: `jwksUri`, `allowedAlgorithms`, `issuer?`, `audience?`, `cacheTtlMs?`, `fetchTimeoutMs?`.
+- `createHashedApiKeyStrategy(config)`: Pre-hashes `staticKeys` at initialization for $O(1)$ constant-time lookup immune to timing attacks, or queries dynamic `store.findByKeyHash(keyHash)`.
+- `createSessionCookieStrategy(config)`: Verifies HMAC-SHA256 signed session cookies from `Cookie` header against `store: SessionStore` (`get`, `set`, `destroy`).
+- `createOidcIntrospectionStrategy(config)`: Validates opaque Bearer access tokens via RFC 7662 with UTF-8 safe HTTP Basic authentication and bounded caching via `BoundedLruCache(5000)`.
+- `evaluateActionAuth(config, user, scopes, headers, input)`: Evaluates action-level declarative guards (`authRequired`, `roles`, `permissions`, `policy`).
+- Testing: `MockSessionStore`, `MockApiKeyStore` (`@shukoi/auth/testing`).
+
+#### @shukoi/db
+- Pluggable ORM Adapters: `createDrizzleAdapter(db, options)`, `createKyselyAdapter(db, options)`, `createPrismaAdapter(prisma, options)`, `createD1Adapter(d1, options)`.
+- `TransactionIsolationLevel`: ANSI SQL isolation levels ('read uncommitted', 'read committed', 'repeatable read', 'serializable', 'snapshot') forwarded to Drizzle, Kysely, and Prisma.
+- `D1DatabaseAdapter.batch<T>(statements)`: Native atomic multi-statement batching for Cloudflare D1.
+- `TransactionManager`: Manages transaction lifecycle with composite `AbortSignal` cancellation and automatic rollback.
+- `TransactionalOutbox`: Enqueues outbox events atomically within the database transaction (`shukoi_outbox_events` table) and dispatches batches to eliminate dual-write inconsistencies.
+- Testing: `MockDatabaseAdapter`, `MockOutboxStore` (`@shukoi/db/testing`).
+
+---
+
 ## 4. Architecture Decision Records (ADRs) Summary
 
 - ADR 001: Adaptive TypeBox JIT: Capability probe `new Function` vs AST fallback for Cloudflare Workers.

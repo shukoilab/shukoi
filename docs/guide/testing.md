@@ -164,3 +164,8 @@ Each runtime adapter exports dedicated testing doubles to verify edge-specific b
 - **Cloudflare Workers:** `import { createMockCloudflareContext, createMockD1Database, createMockKVNamespace } from '@shukoi/cloudflare/testing';`
 - **AWS Lambda:** `import { createMockLambdaContext, createMockApiGatewayV2Event } from '@shukoi/lambda/testing';`
 - **Self-Host Server:** `import { createMockSelfHostContext } from '@shukoi/selfhost/testing';`
+- **Redis Idempotency:** `import { MockRedisClient } from '@shukoi/store-redis/testing';`
+- **Distributed Rate Limiting:** `import { MockRateLimitRedisClient } from '@shukoi/ratelimit/testing';`
+- **OpenTelemetry & Metrics:** `import { MockSpanExporter, MockMetricReader } from '@shukoi/otel/testing';`
+- **Enterprise Identity:** `import { MockSessionStore, MockApiKeyStore } from '@shukoi/auth/testing';`
+- **Database & Outbox:** `import { MockDatabaseAdapter, MockOutboxStore } from '@shukoi/db/testing';`

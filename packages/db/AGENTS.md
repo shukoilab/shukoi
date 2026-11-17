@@ -12,7 +12,11 @@
 2. **Composite Abort & Auto-Rollback:**
    - Database transactions managed through `ctx.transaction()` MUST listen to the composite `AbortSignal`.
    - When a client disconnects or an action times out, the active database transaction MUST be aborted and rolled back immediately to release table and row locks.
-3. **Pure Web-Standard Edge Isolation (`./d1`):**
+3. **ANSI SQL Transaction Isolation Levels:**
+   - The package supports standard `TransactionIsolationLevel` ('read uncommitted', 'read committed', 'repeatable read', 'serializable', 'snapshot') forwarded to Drizzle, Kysely, and Prisma.
+4. **Cloudflare D1 Multi-Statement Atomicity:**
+   - Multi-statement atomic mutations in Cloudflare D1 MUST use `d1.batch()` or `D1DatabaseAdapter.batch()`. Manual `BEGIN TRANSACTION` / `COMMIT` statements are rejected by Cloudflare D1.
+5. **Pure Web-Standard Edge Isolation (`./d1`):**
    - The `./d1` subpath MUST contain ZERO `node:*` imports or native C++ addons to remain 100% compatible with Cloudflare Workers V8 Isolates.
-4. **Universal 7-Tag Docstrings:**
+6. **Universal 7-Tag Docstrings:**
    - Every interface, class, method, function, and exported constant must include all 7 native docstring tags (`@purpose`, `@rationale`, `@preconditions`, `@param`, `@returns`, `@throws`, `@invariants`).

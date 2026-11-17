@@ -92,23 +92,56 @@ shukoi_action_duration_ms_count{action="orderAction"} 142
 In Cloudflare Workers, export spans to your OTel Collector, Datadog, or Honeycomb endpoint without blocking HTTP requests:
 
 ```typescript
+import { createRestRouter } from '@shukoi/api';
 import { toCloudflareWorker } from '@shukoi/cloudflare';
+import { createDefaultConfig } from '@shukoi/core';
 import { createOpenTelemetryPlugin, OtlpHttpSpanExporter } from '@shukoi/otel';
+import { orderAction } from './actions/order.js';
 
-export default toCloudflareWorker((env, ctx) => {
-  const exporter = new OtlpHttpSpanExporter({
-    endpoint: env.OTEL_EXPORTER_OTLP_ENDPOINT,
-    headers: { Authorization: `Bearer ${env.OTEL_EXPORTER_OTLP_TOKEN}` },
-  });
-
-  const otelPlugin = createOpenTelemetryPlugin({
-    serviceName: 'edge-service',
-    exporter,
-  });
-
-  // Use waitUntil to flush spans asynchronously
-  ctx.waitUntil(otelPlugin.flush());
-
-  return createRestRouter([...], config, { plugins: [otelPlugin] });
+const exporter = new OtlpHttpSpanExporter({
+  endpoint: 'https://collector.example.com/v1/traces',
+  serviceName: 'edge-service',
+  resourceAttributes: {
+    'deployment.environment': 'production',
+  },
+  timeoutMs: 5000,
 });
+
+export const otelPlugin = createOpenTelemetryPlugin({
+  serviceName: 'edge-service',
+  serviceVersion: '1.0.3',
+  exporter,
+});
+
+export const config = createDefaultConfig({
+  plugins: [otelPlugin],
+});
+
+export const app = createRestRouter([orderAction], config);
+
+export default toCloudflareWorker(app);
+```
+
+---
+
+## 5. Manual Spans, SpanKind & Exception Recording
+
+You can create custom spans and log exceptions adhering to OpenTelemetry semantic conventions:
+
+```typescript
+const tracer = otelPlugin.tracer;
+
+// Start a span with explicit SpanKind ('INTERNAL' | 'SERVER' | 'CLIENT' | 'PRODUCER' | 'CONSUMER')
+const span = tracer.startSpan('externalPaymentCall', null, 'CLIENT');
+
+try {
+  await executePaymentGatewayCall();
+  span.setStatus('OK');
+} catch (err) {
+  // Records exception.type, exception.message, and exception.stacktrace, setting status to ERROR
+  span.recordException(err);
+  throw err;
+} finally {
+  span.end();
+}
 ```

@@ -55,14 +55,9 @@ import { createD1Adapter } from '@shukoi/db/d1';
 import { orderAction } from './actions/order.js';
 import { config } from './config.js';
 
-export default toCloudflareWorker((env) => {
-  const dbAdapter = createD1Adapter(env.DB);
+export const app = createRestRouter([orderAction], config);
 
-  return createRestRouter([orderAction], config, {
-    transactionProvider: dbAdapter.transaction,
-    services: { db: dbAdapter.client, dbAdapter },
-  });
-});
+export default toCloudflareWorker(app);
 ```
 
 > **Cloudflare D1 Transaction Architecture Note:** Cloudflare D1 manages transactions automatically via `db.batch()`. Manual `BEGIN TRANSACTION` / `COMMIT` statements are rejected by D1. Multi-statement atomic mutations must use `dbAdapter.batch([stmt1, stmt2])` to guarantee all-or-nothing execution.
@@ -114,7 +109,35 @@ export const transferFundsAction = defineAction({
 
 ---
 
-## 4. Composite Cancellation & Auto-Rollback
+## 4. Transaction Isolation Levels
+
+When configuring transactions through the database adapter, you can specify ANSI SQL isolation levels:
+
+```typescript
+await dbAdapter.transaction(
+  async (tx) => {
+    // Queries execute under serializable isolation
+  },
+  {
+    isolationLevel: 'serializable',
+    timeoutMs: 5000,
+  },
+);
+```
+
+### Dialect Support Matrix
+
+| Isolation Level | PostgreSQL | MySQL | SQLite / D1 |
+| :--- | :---: | :---: | :---: |
+| `'read uncommitted'` | Supported | Supported | Not Supported |
+| `'read committed'` | Supported (Default) | Supported | Not Supported |
+| `'repeatable read'` | Supported | Supported (Default) | Not Supported |
+| `'serializable'` | Supported | Supported | Supported (Default) |
+| `'snapshot'` | Supported | Not Supported | Not Supported |
+
+---
+
+## 5. Composite Cancellation & Auto-Rollback
 
 If a client disconnects, a network timeout triggers, or a container deadline approaches (`ctx.signal.aborted` fires):
 1. `ctx.transaction` immediately aborts execution.

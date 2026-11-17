@@ -10,8 +10,10 @@ compatibility: TypeScript 5.5+, @shukoi/core, @shukoi/db
 
 1. **Composite Abort Auto-Rollback:** Always pass `ctx.signal` to `ctx.transaction()`. Never suppress abort errors; allow the database driver to trigger an immediate `ROLLBACK` when clients disconnect or timeouts trigger.
 2. **Transactional Outbox for Dual Writes:** When an action mutates database state and publishes events or webhooks, always write the event to the outbox table inside the same atomic transaction. Never publish to external brokers before the database commits.
-3. **Pure Web-Standard Edge Isolation:** In Cloudflare Workers or V8 Isolates, use `@shukoi/db/d1`. Never import `node:net` or native socket drivers in Edge code paths.
-4. **Mandatory Pool Lifecycle:** Long-running servers MUST register `dbAdapter.close()` or `dbAdapter.drain()` with the server graceful drain state machine (`server.onShutdown`) to prevent zombie connection handles on `SIGTERM`.
+3. **ANSI SQL Isolation Levels:** Specify `isolationLevel` ('read uncommitted', 'read committed', 'repeatable read', 'serializable', 'snapshot') in `TransactionOptions` when transactions require serializable or repeatable read consistency.
+4. **Cloudflare D1 Multi-Statement Atomicity:** In Cloudflare D1, multi-statement atomic mutations MUST use `D1DatabaseAdapter.batch()`. Manual `BEGIN TRANSACTION` / `COMMIT` statements are rejected by Cloudflare D1.
+5. **Pure Web-Standard Edge Isolation:** In Cloudflare Workers or V8 Isolates, use `@shukoi/db/d1`. Never import `node:*` modules or native socket drivers in Edge code paths.
+6. **Mandatory Pool Lifecycle:** Long-running servers MUST register `dbAdapter.close()` or `dbAdapter.drain()` with the server graceful drain state machine (`server.onShutdown`) to prevent zombie connection handles on `SIGTERM`.
 
 ---
 
@@ -33,10 +35,7 @@ export const dbAdapter = createDrizzleAdapter(db, {
   onClose: () => pool.end(),
 });
 
-export const app = createRestRouter([orderAction], config, {
-  transactionProvider: dbAdapter.transaction,
-  services: { db: dbAdapter.client },
-});
+export const app = createRestRouter([orderAction], config);
 ```
 
 ---
@@ -75,4 +74,34 @@ export const createOrderAction = defineAction({
     });
   },
 });
+```
+
+---
+
+## 3. Transaction Isolation Levels & Cloudflare D1 Batching
+
+### Specifying Isolation Level
+```typescript
+await dbAdapter.transaction(
+  async (tx) => {
+    // Queries execute under serializable isolation
+  },
+  {
+    isolationLevel: 'serializable',
+    timeoutMs: 5000,
+  },
+);
+```
+
+### Cloudflare D1 Atomic Batching
+```typescript
+import { createD1Adapter } from '@shukoi/db/d1';
+
+const d1Adapter = createD1Adapter(env.DB);
+
+// Atomically executes statements in a single D1 roundtrip
+const results = await d1Adapter.batch([
+  env.DB.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ?').bind(100, 'acc_1'),
+  env.DB.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ?').bind(100, 'acc_2'),
+]);
 ```

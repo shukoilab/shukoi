@@ -39,6 +39,29 @@ Enforces mandatory CI Quality Gates:
 - `QG-06`: Zero Memory Leak Soak Test
 - `QG-07`: Anti-Zombie Process Termination Test
 
+### 4. `shukoi-distributed-resilience`
+Guides AI agents in configuring production-grade distributed concurrency controls:
+- Redis Idempotency Store with `wrapRedisClient` multi-driver normalization (`ioredis`, `node-redis`, `@upstash/redis`), atomic Lua scripts (`ACQUIRE_LUA`, `COMPLETE_LUA`, `RELEASE_LUA`), and `extendLock()` heartbeats.
+- Distributed Rate Limiting via Sliding Window and Token Bucket algorithms (`TOKEN_BUCKET_LUA` in Redis Hash) with IETF Draft-08 headers.
+
+### 5. `shukoi-otel-observability`
+Guides AI agents in configuring distributed tracing and Prometheus metrics:
+- OpenTelemetry W3C TraceContext distributed tracing with OTLP 1.34+ compliant `service.name` inside `resource.attributes` and `SpanKind` classification.
+- Error recording via `span.recordException()`.
+- Prometheus 0.0.4 contiguous text exposition registry (`/metrics`).
+
+### 6. `shukoi-auth-rbac`
+Guides AI agents in implementing zero-trust authentication and access control:
+- Multi-strategy resolver combining cached JWKS rotation, $O(1)$ pre-hashed static API keys, HMAC session cookies, and RFC 7662 OIDC token introspection bounded by `BoundedLruCache(5000)`.
+- Declarative action guards (`authRequired`, `roles`, `permissions`).
+
+### 7. `shukoi-database-transactions`
+Guides AI agents in relational database persistence and transaction orchestration:
+- Modular adapters for Drizzle ORM, Kysely, Prisma Client, and Cloudflare D1.
+- ANSI SQL `TransactionIsolationLevel` configuration.
+- Native Cloudflare D1 `batch()` multi-statement atomicity.
+- Transactional Outbox pattern with `shukoi_outbox_events` and dual-write consistency.
+
 ---
 
 ## Desktop AI Agent Setup

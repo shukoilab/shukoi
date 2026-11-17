@@ -18,6 +18,10 @@
 - [Skill: Create Action](skills/shukoi-create-action/SKILL.md): Step-by-step procedural guide for creating protocol-agnostic 1-file actions.
 - [Skill: Deploy Target](skills/shukoi-deploy-target/SKILL.md): Adapting Shukoi apps to Cloudflare Workers, AWS Lambda, and Bun/Node self-host.
 - [Skill: Quality Gates](skills/shukoi-quality-gates/SKILL.md): Authoring and verifying mandatory CI Quality Gates QG-01 through QG-07.
+- [Skill: Distributed Resilience](skills/shukoi-distributed-resilience/SKILL.md): Redis Idempotency Store, atomic Lua scripts, and distributed rate limiting (Sliding Window & Token Bucket).
+- [Skill: OTel Observability](skills/shukoi-otel-observability/SKILL.md): OpenTelemetry W3C distributed tracing, OTLP 1.34+ export, and Prometheus metrics exposition.
+- [Skill: Auth & RBAC](skills/shukoi-auth-rbac/SKILL.md): Multi-strategy identity resolution (JWKS, API Key, Session Cookie, OIDC) and declarative RBAC/ABAC guards.
+- [Skill: Database Transactions](skills/shukoi-database-transactions/SKILL.md): Pluggable ORM transaction adapters (Drizzle, Kysely, Prisma, D1) and Transactional Outbox pattern.
 
 ## Scoped Packages
 - [@shukoi/core](packages/core/AGENTS.md): Action engine, adaptive validator, single-flight auth, sterile logger, and testing harness.
@@ -26,4 +30,9 @@
 - [@shukoi/cloudflare](packages/cloudflare/AGENTS.md): Cloudflare Workers V8 Isolate adapter with getCloudflareContext, waitUntil, and in-memory D1/KV mocks (./testing).
 - [@shukoi/lambda](packages/lambda/AGENTS.md): AWS Lambda adapter with getLambdaContext, dynamic deadline calculation, cookies, binary Base64, and in-memory event mocks (./testing).
 - [@shukoi/selfhost](packages/selfhost/AGENTS.md): Bun and Node server with getSelfHostContext, OOM 413 defense, graceful drain, /healthz probes, and in-memory mocks (./testing).
+- [@shukoi/store-redis](packages/store-redis/AGENTS.md): Distributed Redis idempotency store with atomic Lua scripts (ACQUIRE, COMPLETE, RELEASE, EXTEND), wrapRedisClient multi-driver adapter, extendLock heartbeat, dual runtimes (./node and ./edge), and in-memory mocks (./testing).
+- [@shukoi/ratelimit](packages/ratelimit/AGENTS.md): Universal distributed rate limiter (Sliding Window and Token Bucket) with Redis Hash Lua engine, BoundedLruCache memory protection, IETF Draft-08 headers, and in-memory mocks (./testing).
+- [@shukoi/otel](packages/otel/AGENTS.md): Enterprise OpenTelemetry distributed tracing and Prometheus metrics plugin with OTLP 1.34+ service metadata, SpanKind, exception recording, bounded queue ceiling, and in-memory mocks (./testing).
+- [@shukoi/auth](packages/auth/AGENTS.md): Enterprise multi-strategy identity (cached JWKS, O(1) pre-hashed API keys, Session Cookie, bounded OIDC) and declarative RBAC/ABAC guards with in-memory mocks (./testing).
+- [@shukoi/db](packages/db/AGENTS.md): Universal modular database and transaction engine with pluggable ORM adapters (Drizzle, Kysely, Prisma, D1), ANSI SQL isolation levels, native D1 batch(), auto-rollback, and Transactional Outbox.
 - [create-shukoi](packages/create-shukoi/AGENTS.md): Interactive and CI project scaffolder CLI.
