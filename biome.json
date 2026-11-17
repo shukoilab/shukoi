@@ -50,7 +50,8 @@
         "packages/cloudflare/**",
         "packages/ratelimit/**",
         "packages/otel/**",
-        "packages/auth/**"
+        "packages/auth/**",
+        "packages/db/src/d1.ts"
       ],
       "linter": {
         "rules": {
@@ -71,7 +72,8 @@
         "packages/store-redis/src/**",
         "packages/ratelimit/src/**",
         "packages/otel/src/**",
-        "packages/auth/src/**"
+        "packages/auth/src/**",
+        "packages/db/src/**"
       ],
       "linter": {
         "rules": {

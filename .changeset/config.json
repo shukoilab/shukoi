@@ -14,6 +14,7 @@
       "@shukoi/ratelimit",
       "@shukoi/otel",
       "@shukoi/auth",
+      "@shukoi/db",
       "create-shukoi"
     ]
   ],

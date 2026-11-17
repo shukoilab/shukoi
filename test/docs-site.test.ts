@@ -55,6 +55,8 @@ describe('VitePress Documentation Site & GitHub Pages Integrity', () => {
       'docs/guide/authentication.md',
       'docs/guide/authorization-rbac.md',
       'docs/guide/observability-otel.md',
+      'docs/guide/database-and-transactions.md',
+      'docs/guide/transactional-outbox.md',
       'docs/protocols/rest-api.md',
       'docs/protocols/mcp.md',
       'docs/runtimes/cloudflare.md',

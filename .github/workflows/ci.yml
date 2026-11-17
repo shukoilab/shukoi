@@ -39,17 +39,18 @@ jobs:
 
       - name: Audit NPM Exports & Subpath Types (publint + attw)
         run: |
-          pnpm dlx publint packages/core packages/api packages/mcp packages/cloudflare packages/lambda packages/selfhost packages/store-redis packages/ratelimit packages/otel packages/auth
+          pnpm dlx publint packages/core packages/api packages/mcp packages/cloudflare packages/lambda packages/selfhost packages/store-redis packages/ratelimit packages/otel packages/auth packages/db
           pnpm dlx @arethetypeswrong/cli --pack packages/core --profile esm-only
           pnpm dlx @arethetypeswrong/cli --pack packages/mcp --profile esm-only
           pnpm dlx @arethetypeswrong/cli --pack packages/store-redis --profile esm-only
           pnpm dlx @arethetypeswrong/cli --pack packages/ratelimit --profile esm-only
           pnpm dlx @arethetypeswrong/cli --pack packages/otel --profile esm-only
           pnpm dlx @arethetypeswrong/cli --pack packages/auth --profile esm-only
+          pnpm dlx @arethetypeswrong/cli --pack packages/db --profile esm-only
 
       - name: Verify Zero node:* Leakage for Edge Runtime
         run: |
-          pnpm dlx esbuild packages/core/dist/index.js packages/api/dist/index.js packages/mcp/dist/http.js packages/cloudflare/dist/index.js packages/store-redis/dist/edge.js packages/ratelimit/dist/index.js packages/otel/dist/edge.js packages/auth/dist/index.js \
+          pnpm dlx esbuild packages/core/dist/index.js packages/api/dist/index.js packages/mcp/dist/http.js packages/cloudflare/dist/index.js packages/store-redis/dist/edge.js packages/ratelimit/dist/index.js packages/otel/dist/edge.js packages/auth/dist/index.js packages/db/dist/d1.js \
             --bundle --platform=browser --format=esm --outdir=/tmp/edge-audit \
             --external:hono --external:@sinclair/typebox --external:@modelcontextprotocol/sdk --external:jose
 

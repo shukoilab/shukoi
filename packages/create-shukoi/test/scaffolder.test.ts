@@ -149,6 +149,12 @@ describe('create-shukoi Scaffolder', () => {
         'redis',
         '--ratelimit',
         'redis',
+        '--db',
+        'drizzle',
+        '--auth',
+        'all',
+        '--observability',
+        'otel',
         '--no-linter',
       ]);
 
@@ -159,6 +165,9 @@ describe('create-shukoi Scaffolder', () => {
       const pkg = JSON.parse(pkgRaw);
       expect(pkg.dependencies['@shukoi/store-redis']).toBeDefined();
       expect(pkg.dependencies['@shukoi/ratelimit']).toBeDefined();
+      expect(pkg.dependencies['@shukoi/db']).toBeDefined();
+      expect(pkg.dependencies['@shukoi/auth']).toBeDefined();
+      expect(pkg.dependencies['@shukoi/otel']).toBeDefined();
       expect(pkg.devDependencies['@biomejs/biome']).toBeUndefined();
     } finally {
       process.chdir(originalCwd);
@@ -207,6 +216,46 @@ describe('create-shukoi Scaffolder', () => {
 
     expect(pkg.dependencies['@shukoi/auth']).toBe(`^${activeVersion}`);
     expect(pkg.dependencies['@shukoi/otel']).toBe(`^${activeVersion}`);
+
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('scaffolds project with @shukoi/db when --db flag is supplied', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'shukoi-test-db-'));
+    const projectName = 'database-service';
+
+    const parsed = parseCliArgs([
+      'database-service',
+      '--products',
+      'api',
+      '--targets',
+      'selfhost',
+      '--db',
+      'drizzle',
+      '--pm',
+      'pnpm',
+    ]);
+    expect(parsed.db).toBe('drizzle');
+
+    const { projectDir } = await scaffoldProject({
+      projectName,
+      targetDir: tmpDir,
+      products: ['api'],
+      targets: ['selfhost'],
+      packageManager: 'pnpm',
+      db: 'drizzle',
+    });
+
+    const corePkgRaw = await fs.readFile(
+      new URL('../../core/package.json', import.meta.url),
+      'utf-8',
+    );
+    const { version: activeVersion } = JSON.parse(corePkgRaw);
+
+    const pkgContent = await fs.readFile(path.join(projectDir, 'package.json'), 'utf-8');
+    const pkg = JSON.parse(pkgContent);
+
+    expect(pkg.dependencies['@shukoi/db']).toBe(`^${activeVersion}`);
 
     await fs.rm(tmpDir, { recursive: true, force: true });
   });

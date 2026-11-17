@@ -24,6 +24,7 @@ describe('Package License & NPM Metadata Integrity', () => {
     'ratelimit',
     'otel',
     'auth',
+    'db',
     'create-shukoi',
   ];
 

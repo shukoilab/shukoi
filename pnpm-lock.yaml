@@ -131,6 +131,19 @@ importers:
         specifier: ^22.13.4
         version: 22.20.5
 
+  packages/db:
+    dependencies:
+      '@shukoi/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@22.20.5)(jiti@2.7.0)(supports-color@7.2.0)(yaml@2.9.1)
+
   packages/lambda:
     dependencies:
       '@shukoi/core':

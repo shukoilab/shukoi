@@ -24,10 +24,11 @@ describe('Package README Documentation Integrity', () => {
     'ratelimit',
     'otel',
     'auth',
+    'db',
     'create-shukoi',
   ];
 
-  it('verifies that all 11 packages contain comprehensive, fluent English READMEs', async () => {
+  it('verifies that all 12 packages contain comprehensive, fluent English READMEs', async () => {
     for (const pkg of packages) {
       const readmePath = path.resolve('packages', pkg, 'README.md');
       const content = await fs.readFile(readmePath, 'utf-8');

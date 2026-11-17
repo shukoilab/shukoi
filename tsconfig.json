@@ -12,6 +12,7 @@
     { "path": "./packages/ratelimit" },
     { "path": "./packages/otel" },
     { "path": "./packages/auth" },
+    { "path": "./packages/db" },
     { "path": "./packages/create-shukoi" }
   ]
 }

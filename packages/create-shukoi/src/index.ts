@@ -17,6 +17,13 @@ export type IdempotencyOption = 'memory' | 'redis' | 'none';
 export type RateLimitOption = 'memory' | 'redis' | 'none';
 export type AuthOption = 'jwks' | 'api-key' | 'session' | 'all' | 'none';
 export type ObservabilityOption = 'otel' | 'prometheus' | 'none';
+/**
+ * @purpose Supported database and ORM options for create-shukoi scaffolding.
+ * @rationale Permits selecting Drizzle, Kysely, Prisma, Cloudflare D1, in-memory double, or none.
+ * @preconditions None.
+ * @invariants String union type.
+ */
+export type DatabaseOption = 'drizzle' | 'kysely' | 'prisma' | 'd1' | 'memory' | 'none';
 
 /**
  * @purpose Configuration options for scaffolding a new Shukoi project.
@@ -34,6 +41,7 @@ export interface ScaffoldOptions {
   readonly ratelimit?: RateLimitOption | undefined;
   readonly auth?: AuthOption | undefined;
   readonly observability?: ObservabilityOption | undefined;
+  readonly db?: DatabaseOption | undefined;
 }
 
 /**
@@ -56,6 +64,7 @@ export function parseCliArgs(argv: readonly string[]): Partial<ScaffoldOptions> 
     ratelimit?: RateLimitOption;
     auth?: AuthOption;
     observability?: ObservabilityOption;
+    db?: DatabaseOption;
   } = {};
 
   for (let i = 0; i < argv.length; i++) {
@@ -109,6 +118,11 @@ export function parseCliArgs(argv: readonly string[]): Partial<ScaffoldOptions> 
       i++;
     } else if (arg.startsWith('--observability=')) {
       result.observability = arg.slice(16).trim() as ObservabilityOption;
+    } else if (arg === '--db' && argv[i + 1]) {
+      result.db = argv[i + 1]?.trim() as DatabaseOption;
+      i++;
+    } else if (arg.startsWith('--db=')) {
+      result.db = arg.slice(5).trim() as DatabaseOption;
     } else if (!arg.startsWith('-') && !result.projectName) {
       result.projectName = arg;
     }
@@ -202,6 +216,10 @@ export async function scaffoldProject(
 
   if (options.observability === 'otel' || options.observability === 'prometheus') {
     dependencies['@shukoi/otel'] = '^1.0.3';
+  }
+
+  if (options.db && options.db !== 'none') {
+    dependencies['@shukoi/db'] = '^1.0.3';
   }
 
   const scripts: Record<string, string> = {
@@ -685,6 +703,9 @@ export async function runCli(argv: readonly string[]): Promise<void> {
       includeLinter: parsed.includeLinter,
       idempotency: parsed.idempotency,
       ratelimit: parsed.ratelimit,
+      auth: parsed.auth,
+      observability: parsed.observability,
+      db: parsed.db,
     });
     console.log(pc.green(`✔ Created Shukoi project "${projectName}" at ${projectDir}`));
     console.log(`Generated ${filesCreated.length} files.`);
@@ -778,6 +799,9 @@ export async function runCli(argv: readonly string[]): Promise<void> {
     includeLinter: parsed.includeLinter,
     idempotency: parsed.idempotency,
     ratelimit: parsed.ratelimit,
+    auth: parsed.auth,
+    observability: parsed.observability,
+    db: parsed.db,
   });
 
   spinner.stop(`Scaffolded ${filesCreated.length} files cleanly.`);

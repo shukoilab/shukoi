@@ -154,6 +154,7 @@ Shukoi was architected from day one to enforce **Twelve Non-Negotiable Invariant
 - 🚦 **Universal Rate Limiting & DoS Defense (`@shukoi/ratelimit`):** Dual-algorithm engine featuring Sliding Window Counter (smooth, boundary burst-free) and Token Bucket (burst-tolerant for LLM token quotas). Emits standard IETF draft headers (`RateLimit-*`, `Retry-After`), integrates with RFC 9457 (429 Problem Details), and strictly caps in-memory fallback memory to $O(1)$ space via `BoundedLruCache(10000)`.
 - 🔭 **Native OpenTelemetry & Prometheus Metrics (`@shukoi/otel`):** W3C TraceContext distributed tracing plugin with zero-dependency Prometheus text exporter (`/metrics`), pure Web-standard OTLP/HTTP JSON exporter (`./edge`), and drop-oldest circular ring buffer guaranteeing $O(1)$ space ceiling without OOM crashes.
 - 🔐 **Enterprise Identity & Declarative RBAC/ABAC (`@shukoi/auth`):** Multi-strategy resolver (JWKS with stampede protection, hashed API keys with constant-time XOR comparison, HMAC-signed session cookies, and RFC 7662 OIDC introspection) with declarative action guards preventing BOLA/IDOR vulnerabilities.
+- 🗄️ **Universal Database & Transactional Outbox (`@shukoi/db`):** Modular transaction orchestrator with first-class adapters for Drizzle, Kysely, Prisma, and Cloudflare D1. Features composite cancellation auto-rollback, graceful connection pool drain, and atomic outbox dual-write consistency.
 
 ---
 
@@ -179,6 +180,7 @@ npm create shukoi@latest my-service -- \
   --ratelimit redis \
   --auth all \
   --observability otel \
+  --db drizzle \
   --pm pnpm
 ```
 
@@ -206,6 +208,7 @@ Every scaffolded project includes:
 | **`@shukoi/ratelimit`** | Universal Distributed Rate Limiter (Sliding Window & Token Bucket) with bounded LRU memory protection, IETF headers, and in-memory mocks (`./testing`) | **Forbidden** (Pure Web Standard) | All Runtimes |
 | **`@shukoi/otel`** | Enterprise OpenTelemetry Distributed Tracing & Prometheus Metrics plugin with bounded ring buffer ($O(1)$) and in-memory mocks (`./testing`) | **Forbidden** (Pure Web Standard) | All Runtimes |
 | **`@shukoi/auth`** | Enterprise Multi-Strategy Identity (JWKS, API Key, Session Cookie, OIDC) and declarative RBAC/ABAC guards with in-memory mocks (`./testing`) | **Forbidden** (Pure Web Standard) | All Runtimes |
+| **`@shukoi/db`** | Universal Database & Transaction Engine with pluggable ORM adapters (Drizzle, Kysely, Prisma, D1), auto-rollback, and Transactional Outbox | Allowed only in node drivers (D1 is pure Web fetch) | All Runtimes |
 | **`create-shukoi`** | Interactive Clack & CI automation project scaffolder CLI | Permitted | Node 22+ / Bun |
 
 ---

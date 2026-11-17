@@ -85,6 +85,13 @@ export default defineConfig({
             { text: 'OpenTelemetry & Metrics', link: '/guide/observability-otel' },
           ],
         },
+        {
+          text: 'Data & Persistence',
+          items: [
+            { text: 'Transactions & ORMs', link: '/guide/database-and-transactions' },
+            { text: 'Transactional Outbox', link: '/guide/transactional-outbox' },
+          ],
+        },
       ],
       '/protocols/': [
         {
