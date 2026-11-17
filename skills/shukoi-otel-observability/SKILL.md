@@ -25,7 +25,7 @@ import { orderAction } from './actions/order.js';
 
 const otelPlugin = createOpenTelemetryPlugin({
   serviceName: 'order-service',
-  serviceVersion: '1.0.3',
+  serviceVersion: '1.0.4',
   exporter: new OtlpHttpSpanExporter({
     endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? 'http://localhost:4318/v1/traces',
     serviceName: 'order-service',

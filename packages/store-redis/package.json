@@ -1,6 +1,6 @@
 {
   "name": "@shukoi/store-redis",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Distributed Redis idempotency lock store with atomic Lua scripts and Edge HTTP fallback for Shukoi.",
   "keywords": [
     "shukoi",

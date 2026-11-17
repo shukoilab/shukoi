@@ -50,7 +50,7 @@ const exporter = new OtlpHttpSpanExporter({
 // Instantiate Shukoi OpenTelemetry plugin
 export const otelPlugin = createOpenTelemetryPlugin({
   serviceName: 'order-service',
-  serviceVersion: '1.0.3',
+  serviceVersion: '1.0.4',
   exporter,
   maxQueueSize: 2048,
   batchSize: 512,

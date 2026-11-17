@@ -134,7 +134,7 @@ export class OtlpHttpSpanExporter implements SpanExporter {
           resource: { attributes: resAttrs },
           scopeSpans: [
             {
-              scope: { name: 'shukoi.otel', version: '1.0.3' },
+              scope: { name: 'shukoi.otel', version: '1.0.4' },
               spans: spans.map(toOtlpJsonSpan),
             },
           ],

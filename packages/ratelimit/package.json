@@ -1,6 +1,6 @@
 {
   "name": "@shukoi/ratelimit",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Universal distributed rate limiter (Sliding Window & Token Bucket) with IETF RFC headers for Shukoi.",
   "keywords": [
     "shukoi",

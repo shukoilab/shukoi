@@ -29,7 +29,7 @@ import { orderAction } from './actions/order.js';
 
 export const otelPlugin = createOpenTelemetryPlugin({
   serviceName: 'billing-service',
-  serviceVersion: '1.0.3',
+  serviceVersion: '1.0.4',
   maxQueueSize: 2048,
 });
 
@@ -109,7 +109,7 @@ const exporter = new OtlpHttpSpanExporter({
 
 export const otelPlugin = createOpenTelemetryPlugin({
   serviceName: 'edge-service',
-  serviceVersion: '1.0.3',
+  serviceVersion: '1.0.4',
   exporter,
 });
 

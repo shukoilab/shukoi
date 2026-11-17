@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Shukoi Showcase API",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "description": "Shukoi Auto-Generated OpenAPI 3.1.0 Specification"
   },
   "servers": [

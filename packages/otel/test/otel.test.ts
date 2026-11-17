@@ -39,7 +39,7 @@ describe('@shukoi/otel OpenTelemetry & Prometheus Integration', () => {
     const mockExporter = new MockSpanExporter();
     const otelPlugin = createOpenTelemetryPlugin({
       serviceName: 'test-service',
-      serviceVersion: '1.0.3',
+      serviceVersion: '1.0.4',
       exporter: mockExporter,
     });
 
