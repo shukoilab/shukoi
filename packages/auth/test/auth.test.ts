@@ -114,6 +114,23 @@ describe('@shukoi/auth Multi-Strategy & RBAC/ABAC Suite', () => {
       const noHeader = await strategy.authenticate({});
       expect(noHeader).toBeNull();
     });
+
+    it('verifies static API keys via O(1) constant-time pre-hashed lookup', async () => {
+      const strategy = createHashedApiKeyStrategy({
+        staticKeys: {
+          static_secret_123: { user: { id: 'admin_user' }, scopes: ['admin:*'] },
+        },
+      });
+
+      const auth = await strategy.authenticate({ 'x-api-key': 'static_secret_123' });
+      expect(auth).not.toBeNull();
+      expect(auth?.user).toEqual({ id: 'admin_user' });
+      expect(auth?.scopes.has('admin:*')).toBe(true);
+
+      await expect(strategy.authenticate({ 'x-api-key': 'invalid_secret' })).rejects.toThrow(
+        DomainError,
+      );
+    });
   });
 
   describe('Composite Auth Resolver', () => {

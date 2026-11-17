@@ -109,4 +109,72 @@ describe('@shukoi/db Modular ORM Adapters', () => {
     expect(result.count).toBe(1);
     await adapter.close(); // No-op for D1
   });
+
+  it('forwards isolationLevel to Drizzle, Kysely, and Prisma adapters', async () => {
+    // 1. Drizzle with isolationLevel
+    let drizzleIso = '';
+    const mockDrizzle = {
+      transaction: async (
+        cb: (tx: unknown) => Promise<unknown>,
+        config?: { isolationLevel?: string },
+      ) => {
+        drizzleIso = config?.isolationLevel ?? '';
+        return await cb({});
+      },
+    };
+    const drizzleAdapter = createDrizzleAdapter(mockDrizzle);
+    await drizzleAdapter.transaction(async () => ({ ok: true }), {
+      isolationLevel: 'serializable',
+    });
+    expect(drizzleIso).toBe('serializable');
+
+    // 2. Kysely with isolationLevel
+    let kyselyIso = '';
+    const mockKysely = {
+      transaction: () => ({
+        setIsolationLevel(level: string) {
+          kyselyIso = level;
+          return this;
+        },
+        async execute(cb: (trx: unknown) => Promise<unknown>) {
+          return await cb({});
+        },
+      }),
+    };
+    const kyselyAdapter = createKyselyAdapter(mockKysely);
+    await kyselyAdapter.transaction(async () => ({ ok: true }), {
+      isolationLevel: 'repeatable read',
+    });
+    expect(kyselyIso).toBe('repeatable read');
+
+    // 3. Prisma with isolationLevel
+    let prismaIso = '';
+    const mockPrisma = {
+      $transaction: async (
+        cb: (tx: unknown) => Promise<unknown>,
+        options?: { isolationLevel?: string },
+      ) => {
+        prismaIso = options?.isolationLevel ?? '';
+        return await cb({});
+      },
+    };
+    const prismaAdapter = createPrismaAdapter(mockPrisma);
+    await prismaAdapter.transaction(async () => ({ ok: true }), {
+      isolationLevel: 'read committed',
+    });
+    expect(prismaIso).toBe('read committed');
+  });
+
+  it('provides native batch() execution on D1 adapter', async () => {
+    const mockD1 = {
+      prepare: (_query: string) => ({ bind: () => ({}) }),
+      batch: async <T = unknown>(_statements: unknown[]): Promise<T[]> => {
+        return [{ success: true }, { success: true }] as T[];
+      },
+    };
+
+    const adapter = createD1Adapter(mockD1);
+    const batchRes = await adapter.batch([{ sql: 'STMT_1' }, { sql: 'STMT_2' }]);
+    expect(batchRes.length).toBe(2);
+  });
 });

@@ -9,6 +9,15 @@ import { DomainError } from '@shukoi/core';
 import { BoundedLruCache } from './lru.js';
 import type { RateLimitAlgorithm, RateLimitRedisClient, RateLimitResult } from './types.js';
 
+/**
+ * @purpose Atomic Redis Lua script for distributed sliding window rate limiting.
+ * @rationale Evaluates timestamped request history in a Redis Sorted Set with bounded single-tick cleanup.
+ * @preconditions KEYS[1]: rate limit key. ARGV[1]: now (ms). ARGV[2]: windowMs. ARGV[3]: limit. ARGV[4]: cost.
+ * @param KEYS Redis keys array containing the rate limit key.
+ * @returns Array tuple: [success (1 or 0), remaining quota, resetSeconds].
+ * @throws Never throws unhandled; evaluated atomically by Redis server.
+ * @invariants Single atomic roundtrip; $O(\log N)$ Sorted Set insertion and range deletion.
+ */
 export const SLIDING_WINDOW_LUA = `
 local now = tonumber(ARGV[1])
 local window = tonumber(ARGV[2])
@@ -20,8 +29,15 @@ redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, clearBefore)
 local current = redis.call('ZCARD', KEYS[1])
 
 if (current + cost) <= limit then
-  for i = 1, cost do
-    redis.call('ZADD', KEYS[1], now, now .. ':' .. i .. ':' .. math.random(100000, 999999))
+  if cost == 1 then
+    redis.call('ZADD', KEYS[1], now, now .. ':' .. math.random(100000, 999999))
+  else
+    local entries = {}
+    for i = 1, cost do
+      entries[#entries + 1] = now
+      entries[#entries + 1] = now .. ':' .. i .. ':' .. math.random(100000, 999999)
+    end
+    redis.call('ZADD', KEYS[1], unpack(entries))
   end
   redis.call('PEXPIRE', KEYS[1], window)
   return { 1, limit - current - cost, math.ceil(window / 1000) }

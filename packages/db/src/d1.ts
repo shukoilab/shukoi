@@ -33,19 +33,33 @@ export interface D1AdapterOptions {
 }
 
 /**
+ * @purpose Cloudflare D1 DatabaseAdapter interface extending base contract with native atomic batching.
+ * @rationale Exposes d1.batch() directly for atomic multi-statement transactions in V8 Isolates.
+ * @preconditions TD1 must implement minimal D1DatabaseLike batch contract.
+ * @param None
+ * @returns Interface specification.
+ * @throws Never throws.
+ * @invariants Pure Web standards; zero node:* imports.
+ */
+export interface D1DatabaseAdapter<TD1 extends D1DatabaseLike = D1DatabaseLike>
+  extends DatabaseAdapter<TD1, TD1> {
+  batch<T = unknown>(statements: unknown[]): Promise<T[]>;
+}
+
+/**
  * @purpose Creates a DatabaseAdapter wrapping a Cloudflare D1 binding.
  * @rationale Bridges Cloudflare D1 batch operations into Shukoi's action execution context with zero node:* leakage.
  * @preconditions d1 must be a valid D1Database binding instance from Cloudflare Workers env.
  * @param d1 D1Database binding from env.
  * @param _options Adapter configuration options.
- * @returns Fully configured DatabaseAdapter instance.
+ * @returns Fully configured D1DatabaseAdapter instance.
  * @throws Never throws during factory invocation.
  * @invariants Pure Web standards; Big-O O(1) invocation overhead.
  */
 export function createD1Adapter<TD1 extends D1DatabaseLike = D1DatabaseLike>(
   d1: TD1,
   _options?: D1AdapterOptions,
-): DatabaseAdapter<TD1, TD1> {
+): D1DatabaseAdapter<TD1> {
   const manager = new TransactionManager();
 
   return {
@@ -60,6 +74,9 @@ export function createD1Adapter<TD1 extends D1DatabaseLike = D1DatabaseLike>(
         handler,
         txOptions,
       );
+    },
+    async batch<T = unknown>(statements: unknown[]): Promise<T[]> {
+      return await d1.batch<T>(statements);
     },
     async close(): Promise<void> {
       // D1 is managed serverless SQLite; zero sockets to close

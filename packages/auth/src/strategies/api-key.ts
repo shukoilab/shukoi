@@ -6,7 +6,7 @@
  */
 
 import type { AuthResult } from '@shukoi/core';
-import { DomainError, safeCompareSecrets } from '@shukoi/core';
+import { DomainError } from '@shukoi/core';
 import type { AuthStrategy, HashedApiKeyStrategyConfig } from '../types.js';
 
 /**
@@ -33,6 +33,20 @@ export function createHashedApiKeyStrategy<TUser = unknown>(
 ): AuthStrategy<TUser> {
   const headerName = (config.apiKeyHeaderName ?? 'x-api-key').toLowerCase();
 
+  // Pre-hash static keys at factory initialization to guarantee O(1) constant-time lookup
+  const staticKeyHashesPromise: Promise<
+    Map<string, { user: unknown; scopes?: readonly string[] }>
+  > = (async () => {
+    const map = new Map<string, { user: unknown; scopes?: readonly string[] }>();
+    if (config.staticKeys) {
+      for (const [validKey, profile] of Object.entries(config.staticKeys)) {
+        const hash = await hashApiKey(validKey.trim());
+        map.set(hash, profile);
+      }
+    }
+    return map;
+  })();
+
   return {
     name: 'api-key',
     async authenticate(
@@ -44,10 +58,10 @@ export function createHashedApiKeyStrategy<TUser = unknown>(
       }
 
       const trimmedKey = rawApiKey.trim();
+      const keyHash = await hashApiKey(trimmedKey);
 
       // 1. Check dynamic ApiKeyStore if configured
       if (config.store) {
-        const keyHash = await hashApiKey(trimmedKey);
         const record = await config.store.findByKeyHash(keyHash);
         if (!record) {
           throw new DomainError('UNAUTHORIZED', 'Invalid API Key provided', 401);
@@ -61,17 +75,17 @@ export function createHashedApiKeyStrategy<TUser = unknown>(
         };
       }
 
-      // 2. Check static keys map if configured
+      // 2. Check static keys map via O(1) constant-time pre-hashed lookup
       if (config.staticKeys) {
-        for (const [validKey, profile] of Object.entries(config.staticKeys)) {
-          if (await safeCompareSecrets(trimmedKey, validKey)) {
-            const scopes = new Set<string>(profile.scopes ?? ['*']);
-            return {
-              user: profile.user as Readonly<TUser>,
-              scopes: Object.freeze(scopes),
-              token: trimmedKey,
-            };
-          }
+        const staticMap = await staticKeyHashesPromise;
+        const profile = staticMap.get(keyHash);
+        if (profile) {
+          const scopes = new Set<string>(profile.scopes ?? ['*']);
+          return {
+            user: profile.user as Readonly<TUser>,
+            scopes: Object.freeze(scopes),
+            token: trimmedKey,
+          };
         }
         throw new DomainError('UNAUTHORIZED', 'Invalid API Key provided', 401);
       }

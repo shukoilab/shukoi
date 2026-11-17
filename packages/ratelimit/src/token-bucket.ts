@@ -1,13 +1,13 @@
 /**
- * @purpose Token Bucket rate limiting algorithm.
+ * @purpose Token Bucket rate limiting algorithm with in-memory LRU and distributed Redis backend.
  * @rationale Accommodates traffic bursts while strictly bounding average consumption rate; ideal for LLM token quotas.
  * @preconditions capacity and refillRate must be positive numbers.
- * @invariants O(1) time complexity; non-negative tokens; bounded memory via BoundedLruCache.
+ * @invariants O(1) time complexity; non-negative tokens; bounded memory via BoundedLruCache; atomic Redis Lua evaluation.
  */
 
 import { DomainError } from '@shukoi/core';
 import { BoundedLruCache } from './lru.js';
-import type { RateLimitAlgorithm, RateLimitResult } from './types.js';
+import type { RateLimitAlgorithm, RateLimitRedisClient, RateLimitResult } from './types.js';
 
 interface BucketState {
   tokens: number;
@@ -15,8 +15,53 @@ interface BucketState {
 }
 
 /**
+ * @purpose Atomic Redis Lua script for distributed token bucket evaluation.
+ * @rationale Computes token replenishment and consumption in a single atomic tick using Redis Hash.
+ * @preconditions KEYS[1]: bucket key. ARGV[1]: capacity. ARGV[2]: refillRate. ARGV[3]: intervalMs. ARGV[4]: now. ARGV[5]: cost.
+ * @param KEYS Redis keys array with single bucket key.
+ * @returns Array tuple: [success (1 or 0), remaining tokens, resetMs, retryAfter seconds].
+ * @throws Never throws unhandled; Redis returns integer/array status.
+ * @invariants Single atomic roundtrip; $O(1)$ time complexity; resilient TTL expiration.
+ */
+export const TOKEN_BUCKET_LUA = `
+local key = KEYS[1]
+local capacity = tonumber(ARGV[1])
+local refillRate = tonumber(ARGV[2])
+local intervalMs = tonumber(ARGV[3])
+local now = tonumber(ARGV[4])
+local cost = tonumber(ARGV[5])
+
+local data = redis.call('HMGET', key, 'tokens', 'lastRefill')
+local tokens = tonumber(data[1])
+local lastRefill = tonumber(data[2])
+
+if not tokens or not lastRefill then
+  tokens = capacity
+  lastRefill = now
+else
+  local elapsed = math.max(0, now - lastRefill)
+  local added = (elapsed / intervalMs) * refillRate
+  tokens = math.min(capacity, tokens + added)
+end
+
+if tokens >= cost then
+  local remaining = tokens - cost
+  redis.call('HSET', key, 'tokens', remaining, 'lastRefill', now)
+  local ttlSec = math.max(2, math.ceil(((capacity - remaining) / refillRate) * (intervalMs / 1000))) * 2
+  redis.call('PEXPIRE', key, ttlSec * 1000)
+  local resetMs = math.ceil(((capacity - remaining) / refillRate) * intervalMs)
+  return { 1, math.floor(remaining), resetMs, 0 }
+else
+  local deficit = cost - tokens
+  local timeNeededMs = math.ceil((deficit / refillRate) * intervalMs)
+  local retryAfter = math.max(1, math.ceil(timeNeededMs / 1000))
+  return { 0, math.floor(tokens), timeNeededMs, retryAfter }
+end
+`;
+
+/**
  * @purpose Configuration options for tokenBucket algorithm.
- * @rationale Defines bucket capacity, replenishment rate, and replenishment interval.
+ * @rationale Defines bucket capacity, replenishment rate, interval, cache capacity, and optional Redis client.
  * @preconditions capacity and refillRate must be positive numbers.
  * @param None
  * @returns Configuration interface.
@@ -27,12 +72,13 @@ export interface TokenBucketOptions {
   readonly capacity: number;
   readonly refillRate: number; // tokens added per interval
   readonly intervalMs?: number | undefined; // interval duration (default: 1000 ms)
+  readonly client?: RateLimitRedisClient | undefined;
   readonly maxMemoryEntries?: number | undefined;
 }
 
 /**
  * @purpose Token bucket rate limiting strategy implementation.
- * @rationale Replenishes tokens continuously based on elapsed time; permits controlled bursts up to capacity.
+ * @rationale Replenishes tokens continuously based on elapsed time; permits controlled bursts up to capacity in-memory or in Redis.
  * @preconditions options must specify positive capacity and refillRate.
  * @param options TokenBucketOptions configuration.
  * @returns Instantiated TokenBucketAlgorithm.
@@ -43,12 +89,14 @@ export class TokenBucketAlgorithm implements RateLimitAlgorithm {
   private readonly capacity: number;
   private readonly refillRate: number;
   private readonly intervalMs: number;
+  private readonly client?: RateLimitRedisClient | undefined;
   private readonly memoryCache: BoundedLruCache<string, BucketState>;
 
   public constructor(options: TokenBucketOptions) {
     this.capacity = options.capacity;
     this.refillRate = options.refillRate;
     this.intervalMs = options.intervalMs ?? 1000;
+    this.client = options.client;
     this.memoryCache = new BoundedLruCache<string, BucketState>(options.maxMemoryEntries ?? 10000);
   }
 
@@ -67,6 +115,26 @@ export class TokenBucketAlgorithm implements RateLimitAlgorithm {
       throw new DomainError('VALIDATION_ERROR', 'Rate limit cost must be a positive integer', 422);
     }
     const now = Date.now();
+
+    // 1. Redis Distributed Mode
+    if (this.client) {
+      const res = (await this.client.eval(
+        TOKEN_BUCKET_LUA,
+        [key],
+        [this.capacity, this.refillRate, this.intervalMs, now, cost],
+      )) as [number, number, number, number];
+
+      const [allowed, remaining, resetMs, retryAfter] = res;
+      return {
+        success: allowed === 1,
+        limit: this.capacity,
+        remaining,
+        resetMs,
+        retryAfter,
+      };
+    }
+
+    // 2. In-Memory Mode
     const existing = this.memoryCache.get(key) ?? {
       tokens: this.capacity,
       lastRefill: now,
@@ -112,7 +180,7 @@ export class TokenBucketAlgorithm implements RateLimitAlgorithm {
  * @purpose Declarative factory for creating a TokenBucketAlgorithm instance.
  * @rationale Convenience entrypoint constructing TokenBucketAlgorithm with valid options.
  * @preconditions options must specify positive capacity and refillRate.
- * @param options TokenBucketOptions configuration.
+ * @param options TokenBucketOptions configuration parameters.
  * @returns Fully instantiated TokenBucketAlgorithm.
  * @throws Never throws during creation.
  * @invariants Pure factory function; Big-O O(1).

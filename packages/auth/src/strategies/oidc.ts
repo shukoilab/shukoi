@@ -7,7 +7,27 @@
 
 import type { AuthResult } from '@shukoi/core';
 import { DomainError } from '@shukoi/core';
+import { BoundedLruCache } from '../lru.js';
 import type { AuthStrategy, OidcIntrospectionStrategyConfig } from '../types.js';
+
+/**
+ * @purpose Encodes HTTP Basic credentials safely handling UTF-8 characters without Latin-1 errors.
+ * @rationale Avoids btoa Latin-1 limitation by encoding UTF-8 byte sequences prior to Base64 serialization.
+ * @preconditions username and secret must be strings.
+ * @param username Client identifier string.
+ * @param secret Client secret string.
+ * @returns RFC 7617 compatible Base64 credentials string.
+ * @throws Never throws.
+ * @invariants Big-O O(L) where L is credential character length.
+ */
+function encodeBasicAuth(username: string, secret: string): string {
+  const bytes = new TextEncoder().encode(`${username}:${secret}`);
+  let binary = '';
+  for (const b of bytes) {
+    binary += String.fromCharCode(b);
+  }
+  return btoa(binary);
+}
 
 /**
  * @purpose Standard RFC 7662 introspection response structure.
@@ -32,7 +52,7 @@ export function createOidcIntrospectionStrategy<TUser = unknown>(
   const cacheTtlMs = config.cacheTtlMs ?? 60_000;
   const timeoutMs = config.fetchTimeoutMs ?? 5000;
 
-  const cache = new Map<string, { result: AuthResult<TUser>; expiresAt: number }>();
+  const cache = new BoundedLruCache<string, { result: AuthResult<TUser>; expiresAt: number }>(5000);
   const inFlight = new Map<string, Promise<AuthResult<TUser>>>();
 
   async function introspectToken(token: string): Promise<AuthResult<TUser>> {
@@ -50,7 +70,7 @@ export function createOidcIntrospectionStrategy<TUser = unknown>(
     const promise = (async () => {
       try {
         const signal = AbortSignal.timeout(timeoutMs);
-        const credentials = btoa(`${config.clientId}:${config.clientSecret}`);
+        const credentials = encodeBasicAuth(config.clientId, config.clientSecret);
 
         const body = new URLSearchParams({ token, token_type_hint: 'access_token' });
         const res = await fetch(config.introspectionUrl, {

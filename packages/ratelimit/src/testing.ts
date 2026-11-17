@@ -15,6 +15,11 @@ interface ZSetEntry {
   member: string;
 }
 
+interface StoredBucket {
+  tokens: number;
+  lastRefill: number;
+}
+
 /**
  * @purpose Mock Redis client simulating Sorted Sets for rate limiting tests.
  * @rationale Validates Redis sliding window script execution without external Redis network dependencies.
@@ -26,24 +31,52 @@ interface ZSetEntry {
  */
 export class MockRateLimitRedisClient implements RateLimitRedisClient {
   private readonly zsets = new Map<string, ZSetEntry[]>();
+  private readonly hashes = new Map<string, StoredBucket>();
 
   /**
-   * @purpose Evaluates simulated sliding window script in memory.
-   * @rationale Mimics Redis ZREMRANGEBYSCORE, ZCARD, ZADD, and PEXPIRE.
+   * @purpose Evaluates simulated rate limit Lua scripts in memory.
+   * @rationale Mimics Redis sliding window ZSET and token bucket HSET operations.
    * @preconditions keys array must contain target key.
-   * @param _script Script identifier or Lua content.
+   * @param script Script identifier or Lua content.
    * @param keys Keys accessed by script.
-   * @param args Numerical arguments: [now, windowMs, limit, cost].
-   * @returns Array tuple: [success (0 or 1), remaining, resetSeconds].
+   * @param args Script arguments.
+   * @returns Array tuple with rate limit decision.
    * @throws Error if key is missing.
-   * @invariants Big-O O(N) array filter and sort.
+   * @invariants Big-O O(1).
    */
-  public async eval(_script: string, keys: string[], args: (string | number)[]): Promise<unknown> {
+  public async eval(script: string, keys: string[], args: (string | number)[]): Promise<unknown> {
     const key = keys[0];
     if (!key) {
       throw new Error('MockRateLimitRedisClient: Missing key');
     }
 
+    // 1. Token Bucket Simulation
+    if (script.includes("redis.call('HSET', key, 'tokens', remaining")) {
+      const capacity = Number(args[0]);
+      const refillRate = Number(args[1]);
+      const intervalMs = Number(args[2]);
+      const now = Number(args[3]);
+      const cost = Number(args[4]);
+
+      const stored = this.hashes.get(key) ?? { tokens: capacity, lastRefill: now };
+      const elapsed = Math.max(0, now - stored.lastRefill);
+      const added = (elapsed / intervalMs) * refillRate;
+      const currentTokens = Math.min(capacity, stored.tokens + added);
+
+      if (currentTokens >= cost) {
+        const remaining = currentTokens - cost;
+        this.hashes.set(key, { tokens: remaining, lastRefill: now });
+        const resetMs = Math.ceil(((capacity - remaining) / refillRate) * intervalMs);
+        return [1, Math.floor(remaining), resetMs, 0];
+      }
+
+      const deficit = cost - currentTokens;
+      const timeNeededMs = Math.ceil((deficit / refillRate) * intervalMs);
+      const retryAfter = Math.max(1, Math.ceil(timeNeededMs / 1000));
+      return [0, Math.floor(currentTokens), timeNeededMs, retryAfter];
+    }
+
+    // 2. Sliding Window Simulation
     const now = Number(args[0]);
     const window = Number(args[1]);
     const limit = Number(args[2]);

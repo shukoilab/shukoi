@@ -14,14 +14,31 @@
 export type DatabaseSystem = 'postgresql' | 'mysql' | 'sqlite' | 'cloudflare_d1';
 
 /**
+ * @purpose Supported relational database transaction isolation levels.
+ * @rationale Conforms to ANSI SQL standards and is supported by Drizzle, Kysely, and Prisma.
+ * @preconditions None.
+ * @param None
+ * @returns Type union definition.
+ * @throws Never throws.
+ * @invariants String literal union.
+ */
+export type TransactionIsolationLevel =
+  | 'read uncommitted'
+  | 'read committed'
+  | 'repeatable read'
+  | 'serializable'
+  | 'snapshot';
+
+/**
  * @purpose Options passed to database transaction invocations.
- * @rationale Configures per-transaction timeout deadlines and composite cancellation signals.
+ * @rationale Configures per-transaction timeout deadlines, cancellation signals, and ANSI isolation levels.
  * @preconditions None.
  * @invariants Readonly options structure.
  */
 export interface TransactionOptions {
   readonly timeoutMs?: number | undefined;
   readonly signal?: AbortSignal | undefined;
+  readonly isolationLevel?: TransactionIsolationLevel | undefined;
 }
 
 /**

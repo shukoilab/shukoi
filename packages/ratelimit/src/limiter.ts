@@ -28,19 +28,22 @@ export class RateLimiter {
 
   /**
    * @purpose Formats structured RateLimitResult into standard IETF RFC headers.
-   * @rationale Emits draft-ietf-httpapi-ratelimit-headers with Limit, Remaining, Reset, and conditional Retry-After.
+   * @rationale Emits draft-ietf-httpapi-ratelimit-headers with Limit, Remaining, Reset, Policy, and conditional Retry-After.
    * @preconditions result must be a valid RateLimitResult.
    * @param result Evaluated rate limit decision.
+   * @param policyWindowSec Optional window size in seconds for RateLimit-Policy header.
    * @returns Record of IETF RateLimit and Retry-After headers.
    * @throws Never throws.
-   * @invariants Compliant with draft-ietf-httpapi-ratelimit-headers; Big-O O(1).
+   * @invariants Compliant with draft-ietf-httpapi-ratelimit-headers-08; Big-O O(1).
    */
-  public getHeaders(result: RateLimitResult): Record<string, string> {
+  public getHeaders(result: RateLimitResult, policyWindowSec?: number): Record<string, string> {
     const resetSec = Math.max(1, Math.ceil(result.resetMs / 1000));
+    const windowSec = policyWindowSec ?? resetSec;
     const headers: Record<string, string> = {
       'RateLimit-Limit': String(result.limit),
       'RateLimit-Remaining': String(result.remaining),
       'RateLimit-Reset': String(resetSec),
+      'RateLimit-Policy': `${result.limit};w=${windowSec}`,
     };
 
     if (!result.success) {

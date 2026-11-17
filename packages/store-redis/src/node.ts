@@ -5,6 +5,7 @@
  * @invariants Compatible with standard TCP Redis client wrappers.
  */
 
+export * from './adapter.js';
 export * from './lua.js';
 export * from './store.js';
 export * from './types.js';

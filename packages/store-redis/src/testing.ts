@@ -115,6 +115,26 @@ export class MockRedisClient implements RedisClient {
       return 0;
     }
 
+    // 4. EXTEND_LUA Simulation
+    if (script.includes('local updated = cjson.encode(decoded)')) {
+      const workerToken = String(args[0]);
+      const ttlMs = Number(args[1]);
+      const now = Number(args[2]);
+      if (current) {
+        const decoded = JSON.parse(current) as {
+          lockToken?: string;
+          status?: string;
+          expiresAt?: number;
+        };
+        if (decoded.status === 'IN_PROGRESS' && decoded.lockToken === workerToken) {
+          decoded.expiresAt = now + ttlMs;
+          this.storage.set(key, { value: JSON.stringify(decoded), expiresAt: now + ttlMs });
+          return 1;
+        }
+      }
+      return 0;
+    }
+
     throw new Error('MockRedisClient: Unhandled script');
   }
 

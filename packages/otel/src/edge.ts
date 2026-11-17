@@ -5,17 +5,47 @@
  * @invariants Pure Web standards; 100% compatible with V8 Isolates; resilient error handling.
  */
 
-import type { SpanExporter, SpanRecord } from './types.js';
+import type { SpanExporter, SpanKind, SpanRecord } from './types.js';
 
 /**
  * @purpose Configuration options for OtlpHttpSpanExporter.
- * @rationale Configures target collector URL, headers, and request timeout.
- * @invariants Typed configuration.
+ * @rationale Configures target collector URL, service identification, resource metadata, headers, and request timeout.
+ * @preconditions Valid collector endpoint string.
+ * @param None
+ * @returns Interface specification.
+ * @throws Never throws.
+ * @invariants Typed configuration; non-negative timeout.
  */
 export interface OtlpHttpExporterOptions {
   readonly endpoint: string;
+  readonly serviceName?: string | undefined;
+  readonly resourceAttributes?: Readonly<Record<string, string>> | undefined;
   readonly headers?: Readonly<Record<string, string>> | undefined;
   readonly timeoutMs?: number | undefined;
+}
+
+/**
+ * @purpose Maps domain SpanKind string to OpenTelemetry numeric SpanKind enum.
+ * @rationale Translates high-level span semantics into OTLP protobuf specification values.
+ * @preconditions Optional SpanKind string.
+ * @param kind Optional domain SpanKind value.
+ * @returns Numeric OTLP SpanKind code (1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER, 5=CONSUMER).
+ * @throws Never throws.
+ * @invariants Big-O O(1) branch mapping.
+ */
+function mapSpanKind(kind?: SpanKind): number {
+  switch (kind) {
+    case 'SERVER':
+      return 2;
+    case 'CLIENT':
+      return 3;
+    case 'PRODUCER':
+      return 4;
+    case 'CONSUMER':
+      return 5;
+    default:
+      return 1;
+  }
 }
 
 /**
@@ -45,7 +75,7 @@ function toOtlpJsonSpan(span: SpanRecord): Record<string, unknown> {
     spanId: span.spanId,
     parentSpanId: span.parentSpanId ?? '',
     name: span.name,
-    kind: 1, // SPAN_KIND_INTERNAL
+    kind: mapSpanKind(span.kind),
     startTimeUnixNano: String(BigInt(span.startTimeMs) * 1_000_000n),
     endTimeUnixNano: String(BigInt(span.endTimeMs) * 1_000_000n),
     attributes,
@@ -63,11 +93,18 @@ function toOtlpJsonSpan(span: SpanRecord): Record<string, unknown> {
  */
 export class OtlpHttpSpanExporter implements SpanExporter {
   private readonly endpoint: string;
+  private readonly serviceName: string;
+  private readonly resourceAttributes: Record<string, string>;
   private readonly headers: Record<string, string>;
   private readonly timeoutMs: number;
 
   public constructor(options: OtlpHttpExporterOptions) {
     this.endpoint = options.endpoint;
+    this.serviceName = options.serviceName ?? 'shukoi-service';
+    this.resourceAttributes = {
+      'service.name': this.serviceName,
+      ...options.resourceAttributes,
+    };
     this.headers = {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -86,9 +123,15 @@ export class OtlpHttpSpanExporter implements SpanExporter {
       return;
     }
 
+    const resAttrs = Object.entries(this.resourceAttributes).map(([k, v]) => ({
+      key: k,
+      value: { stringValue: v },
+    }));
+
     const payload = {
       resourceSpans: [
         {
+          resource: { attributes: resAttrs },
           scopeSpans: [
             {
               scope: { name: 'shukoi.otel', version: '1.0.3' },

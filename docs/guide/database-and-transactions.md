@@ -60,10 +60,12 @@ export default toCloudflareWorker((env) => {
 
   return createRestRouter([orderAction], config, {
     transactionProvider: dbAdapter.transaction,
-    services: { db: dbAdapter.client },
+    services: { db: dbAdapter.client, dbAdapter },
   });
 });
 ```
+
+> **Cloudflare D1 Transaction Architecture Note:** Cloudflare D1 manages transactions automatically via `db.batch()`. Manual `BEGIN TRANSACTION` / `COMMIT` statements are rejected by D1. Multi-statement atomic mutations must use `dbAdapter.batch([stmt1, stmt2])` to guarantee all-or-nothing execution.
 
 ---
 

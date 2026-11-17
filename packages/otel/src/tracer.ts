@@ -10,6 +10,7 @@ import type {
   SpanAttributes,
   SpanAttributeValue,
   SpanExporter,
+  SpanKind,
   SpanRecord,
   SpanStatus,
   TraceParent,
@@ -111,6 +112,7 @@ export class Span {
   public readonly traceId: string;
   public readonly spanId: string;
   public readonly parentSpanId?: string | undefined;
+  public readonly kind: SpanKind;
   public readonly startTimeMs: number;
   private endTimeMs?: number | undefined;
   private status: SpanStatus = { code: 'UNSET' };
@@ -125,6 +127,7 @@ export class Span {
    * @param spanId Unique 16-hex span ID.
    * @param parentSpanId Optional parent 16-hex span ID.
    * @param onEnd Callback invoked once span ends.
+   * @param kind Optional SpanKind classification (default INTERNAL).
    * @returns Span instance.
    * @throws Never throws.
    * @invariants Big-O O(1) constructor.
@@ -135,11 +138,13 @@ export class Span {
     spanId: string,
     parentSpanId: string | undefined,
     onEnd: (record: SpanRecord) => void,
+    kind: SpanKind = 'INTERNAL',
   ) {
     this.name = name;
     this.traceId = traceId;
     this.spanId = spanId;
     this.parentSpanId = parentSpanId;
+    this.kind = kind;
     this.startTimeMs = Date.now();
     this.onEnd = onEnd;
   }
@@ -199,6 +204,29 @@ export class Span {
   }
 
   /**
+   * @purpose Records an exception event on the span and sets status to ERROR.
+   * @rationale Conforms to OpenTelemetry semantic conventions for exception logging.
+   * @preconditions error can be an Error instance or any thrown primitive.
+   * @param error Error instance or thrown error value.
+   * @returns Current Span instance.
+   * @throws Never throws.
+   * @invariants Big-O O(1).
+   */
+  public recordException(error: unknown): this {
+    if (this.endTimeMs !== undefined) {
+      return this;
+    }
+    const err = error instanceof Error ? error : new Error(String(error));
+    this.setStatus('ERROR', err.message);
+    this.setAttribute('exception.type', err.name);
+    this.setAttribute('exception.message', err.message);
+    if (err.stack) {
+      this.setAttribute('exception.stacktrace', err.stack);
+    }
+    return this;
+  }
+
+  /**
    * @purpose Completes span execution and delivers materialized record to tracer.
    * @rationale Idempotent method capturing final endTimeMs and duration.
    * @param endTimeMs Optional override timestamp in milliseconds.
@@ -223,6 +251,7 @@ export class Span {
       traceId: this.traceId,
       spanId: this.spanId,
       parentSpanId: this.parentSpanId,
+      kind: this.kind,
       startTimeMs: this.startTimeMs,
       endTimeMs: this.endTimeMs,
       durationMs,
@@ -267,11 +296,16 @@ export class Tracer {
    * @rationale Generates child span or fresh root span adhering to W3C TraceContext.
    * @param name Descriptive operation name.
    * @param parentContext Optional parsed parent trace context or traceparent header.
+   * @param kind Optional SpanKind (defaults to SERVER for root, INTERNAL for child).
    * @returns Newly created active Span.
    * @throws Never throws.
    * @invariants Big-O O(1).
    */
-  public startSpan(name: string, parentContext?: TraceParent | string | null): Span {
+  public startSpan(
+    name: string,
+    parentContext?: TraceParent | string | null,
+    kind?: SpanKind,
+  ): Span {
     let traceId: string;
     let parentSpanId: string | undefined;
 
@@ -286,10 +320,18 @@ export class Tracer {
     }
 
     const spanId = generateSpanId();
+    const spanKind: SpanKind = kind ?? (parentSpanId ? 'INTERNAL' : 'SERVER');
 
-    const span = new Span(name, traceId, spanId, parentSpanId, (record) => {
-      this.enqueueSpan(record);
-    });
+    const span = new Span(
+      name,
+      traceId,
+      spanId,
+      parentSpanId,
+      (record) => {
+        this.enqueueSpan(record);
+      },
+      spanKind,
+    );
 
     span.setAttribute('service.name', this.config.serviceName);
     if (this.config.serviceVersion) {
@@ -353,5 +395,18 @@ export class Tracer {
    */
   public getQueueLength(): number {
     return this.queue.length;
+  }
+
+  /**
+   * @purpose Returns a readonly snapshot of currently buffered span records.
+   * @rationale Useful for test assertions and buffer inspection.
+   * @preconditions None.
+   * @param None
+   * @returns Readonly array of SpanRecord items.
+   * @throws Never throws.
+   * @invariants Big-O O(N) array copy.
+   */
+  public getQueue(): readonly SpanRecord[] {
+    return [...this.queue];
   }
 }

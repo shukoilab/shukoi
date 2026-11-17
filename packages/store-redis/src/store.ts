@@ -6,7 +6,8 @@
  */
 
 import { DomainError, type IdempotencyRecord, type IdempotencyStore } from '@shukoi/core';
-import { ACQUIRE_LUA, COMPLETE_LUA, RELEASE_LUA } from './lua.js';
+import { wrapRedisClient } from './adapter.js';
+import { ACQUIRE_LUA, COMPLETE_LUA, EXTEND_LUA, RELEASE_LUA } from './lua.js';
 import type { RedisClient, RedisStoreOptions } from './types.js';
 
 /**
@@ -26,7 +27,7 @@ export class RedisIdempotencyStore implements IdempotencyStore {
   private readonly workerToken: string;
 
   public constructor(options: RedisStoreOptions) {
-    this.client = options.client;
+    this.client = wrapRedisClient(options.client);
     this.keyPrefix = options.keyPrefix ?? 'shukoi:idemp:';
     this.defaultLockTtlMs = options.defaultLockTtlMs ?? 30000;
     this.defaultRetentionTtlMs = options.defaultRetentionTtlMs ?? 86400000;
@@ -125,6 +126,33 @@ export class RedisIdempotencyStore implements IdempotencyStore {
       [lockKey],
       [this.workerToken, JSON.stringify(record), retentionTtl],
     );
+  }
+
+  /**
+   * @purpose Extends/renews an active in-progress idempotency lock duration (heartbeat).
+   * @rationale Prevents lock expiration during long-running async computations if the lock is still owned.
+   * @preconditions actionName and key must be non-empty strings.
+   * @param actionName Target action name.
+   * @param key Unique client idempotency key.
+   * @param additionalTtlMs Milliseconds to extend the lock by (defaults to defaultLockTtlMs).
+   * @returns True if lock TTL was successfully extended, false if expired or owned by another worker.
+   * @throws Never throws unhandled.
+   * @invariants Big-O O(1) single atomic roundtrip.
+   */
+  public async extendLock(
+    actionName: string,
+    key: string,
+    additionalTtlMs?: number,
+  ): Promise<boolean> {
+    const lockKey = this.compositeKey(actionName, key);
+    const ttl = additionalTtlMs ?? this.defaultLockTtlMs;
+    const now = Date.now();
+    const result = (await this.client.eval(
+      EXTEND_LUA,
+      [lockKey],
+      [this.workerToken, ttl, now],
+    )) as number;
+    return result === 1;
   }
 
   /**

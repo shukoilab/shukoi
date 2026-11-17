@@ -9,6 +9,7 @@ import { DomainError } from '@shukoi/core';
 import { describe, expect, it } from 'vitest';
 import { createRedisIdempotencyStore } from '../src/store.js';
 import { MockRedisClient } from '../src/testing.js';
+import type { RedisClient } from '../src/types.js';
 import { UpstashRedisClient } from '../src/upstash.js';
 
 describe('@shukoi/store-redis Engine', () => {
@@ -108,5 +109,77 @@ describe('@shukoi/store-redis Engine', () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  it('renews lock expiration using extendLock()', async () => {
+    const mockClient = new MockRedisClient();
+    const store = createRedisIdempotencyStore({ client: mockClient });
+
+    await store.tryAcquire('heavyJob', 'job-1', 5000);
+
+    const renewed = await store.extendLock('heavyJob', 'job-1', 15000);
+    expect(renewed).toBe(true);
+
+    const record = await store.get('heavyJob', 'job-1');
+    expect(record?.status).toBe('IN_PROGRESS');
+  });
+
+  it('normalizes ioredis positional arguments and node-redis options objects via wrapRedisClient', async () => {
+    // 1. Simulate ioredis client
+    let ioredisEvaluated = false;
+    const mockIoredis = {
+      status: 'ready',
+      async eval(_script: string, numKeys: number, ...keysAndArgs: (string | number)[]) {
+        expect(numKeys).toBe(1);
+        expect(keysAndArgs[0]).toBe('shukoi:idemp:testIoredis:key1');
+        expect(keysAndArgs[4]).toBe('testIoredis');
+        ioredisEvaluated = true;
+        return ['ACQUIRED', JSON.stringify({ status: 'IN_PROGRESS' })];
+      },
+      async get() {
+        return null;
+      },
+      async set() {
+        return 'OK';
+      },
+      async del() {
+        return 1;
+      },
+    };
+
+    const storeWithIoredis = createRedisIdempotencyStore({
+      client: mockIoredis as unknown as RedisClient,
+    });
+    // Attempting internal tryAcquire evaluates Lua through adapter
+    await storeWithIoredis.tryAcquire('testIoredis', 'key1', 5000);
+    expect(ioredisEvaluated).toBe(true);
+
+    // 2. Simulate node-redis client
+    let nodeRedisEvaluated = false;
+    const mockNodeRedis = {
+      isOpen: true,
+      async eval(_script: string, opts: { keys?: string[]; arguments?: string[] }) {
+        expect(opts.keys).toEqual(['shukoi:idemp:testNodeRedis:key2']);
+        expect(opts.arguments?.[3]).toBe('testNodeRedis');
+        nodeRedisEvaluated = true;
+        return ['ACQUIRED', JSON.stringify({ status: 'IN_PROGRESS' })];
+      },
+      async get() {
+        return null;
+      },
+      async set() {
+        return 'OK';
+      },
+      async del() {
+        return 1;
+      },
+    };
+
+    const storeWithNodeRedis = createRedisIdempotencyStore({
+      client: mockNodeRedis as unknown as RedisClient,
+    });
+    const res = await storeWithNodeRedis.tryAcquire('testNodeRedis', 'key2', 5000);
+    expect(nodeRedisEvaluated).toBe(true);
+    expect(res.acquired).toBe(true);
   });
 });

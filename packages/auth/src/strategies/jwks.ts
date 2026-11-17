@@ -21,17 +21,17 @@ import type { AuthStrategy, JwksStrategyConfig } from '../types.js';
 export function createJwksStrategy<TUser = unknown>(
   config: JwksStrategyConfig,
 ): AuthStrategy<TUser> {
-  let cachedJwks: jose.JSONWebKeySet | null = null;
+  let cachedJwkSet: ReturnType<typeof jose.createLocalJWKSet> | null = null;
   let cacheExpiresAt = 0;
-  let inFlightPromise: Promise<jose.JSONWebKeySet> | null = null;
+  let inFlightPromise: Promise<ReturnType<typeof jose.createLocalJWKSet>> | null = null;
 
   const cacheTtlMs = config.cacheTtlMs ?? 300_000; // 5 minutes default
   const timeoutMs = config.fetchTimeoutMs ?? 5000;
 
-  async function getJwks(): Promise<jose.JSONWebKeySet> {
+  async function getJwkSet(): Promise<ReturnType<typeof jose.createLocalJWKSet>> {
     const now = Date.now();
-    if (cachedJwks && now < cacheExpiresAt) {
-      return cachedJwks;
+    if (cachedJwkSet && now < cacheExpiresAt) {
+      return cachedJwkSet;
     }
     if (inFlightPromise) {
       return inFlightPromise;
@@ -55,9 +55,10 @@ export function createJwksStrategy<TUser = unknown>(
         }
 
         const data = (await res.json()) as jose.JSONWebKeySet;
-        cachedJwks = data;
+        const jwkSet = jose.createLocalJWKSet(data);
+        cachedJwkSet = jwkSet;
         cacheExpiresAt = Date.now() + cacheTtlMs;
-        return data;
+        return jwkSet;
       } finally {
         inFlightPromise = null;
       }
@@ -82,8 +83,7 @@ export function createJwksStrategy<TUser = unknown>(
       }
 
       try {
-        const jwks = await getJwks();
-        const localJwkSet = jose.createLocalJWKSet(jwks);
+        const jwkSet = await getJwkSet();
 
         const verifyOptions: jose.JWTVerifyOptions = {
           algorithms: [...config.allowedAlgorithms],
@@ -95,7 +95,7 @@ export function createJwksStrategy<TUser = unknown>(
           verifyOptions.audience = config.audience;
         }
 
-        const { payload } = await jose.jwtVerify(token, localJwkSet, verifyOptions);
+        const { payload } = await jose.jwtVerify(token, jwkSet, verifyOptions);
 
         const scopes = new Set<string>();
         if (typeof payload['scope'] === 'string') {

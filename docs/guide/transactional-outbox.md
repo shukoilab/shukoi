@@ -31,6 +31,52 @@ CREATE INDEX idx_shukoi_outbox_poll
 ON shukoi_outbox_events (status, locked_until, created_at);
 ```
 
+### Drizzle ORM Table Schema Definition
+
+```typescript
+import { index, integer, json, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core';
+
+export const shukoiOutboxEvents = pgTable(
+  'shukoi_outbox_events',
+  {
+    id: varchar('id', { length: 36 }).primaryKey(),
+    aggregateType: varchar('aggregate_type', { length: 64 }).notNull(),
+    aggregateId: varchar('aggregate_id', { length: 128 }).notNull(),
+    eventType: varchar('event_type', { length: 128 }).notNull(),
+    payload: json('payload').notNull(),
+    headers: json('headers'),
+    status: varchar('status', { length: 16 }).default('PENDING').notNull(),
+    retryCount: integer('retry_count').default(0).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    lockedUntil: timestamp('locked_until'),
+    publishedAt: timestamp('published_at'),
+  },
+  (table) => [
+    index('idx_shukoi_outbox_poll').on(table.status, table.lockedUntil, table.createdAt),
+  ],
+);
+```
+
+### Kysely Database Interface Definition
+
+```typescript
+import type { ColumnType, Generated } from 'kysely';
+
+export interface ShukoiOutboxTable {
+  id: string;
+  aggregate_type: string;
+  aggregate_id: string;
+  event_type: string;
+  payload: string; // JSON string
+  headers: string | null;
+  status: Generated<'PENDING' | 'PROCESSING' | 'PUBLISHED' | 'FAILED'>;
+  retry_count: Generated<number>;
+  created_at: Generated<Date>;
+  locked_until: ColumnType<Date | null, Date | null, Date | null>;
+  published_at: ColumnType<Date | null, Date | null, Date | null>;
+}
+```
+
 ---
 
 ## 2. Enqueuing Events Atomically

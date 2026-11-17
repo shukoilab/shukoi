@@ -30,7 +30,12 @@ export interface DrizzleAdapterOptions {
  * @invariants Pure factory function; Big-O O(1) invocation overhead.
  */
 export function createDrizzleAdapter<
-  TDb extends { transaction: (cb: (tx: TTx) => Promise<unknown>) => Promise<unknown> },
+  TDb extends {
+    transaction: (
+      cb: (tx: TTx) => Promise<unknown>,
+      config?: { isolationLevel?: string },
+    ) => Promise<unknown>;
+  },
   TTx = unknown,
 >(db: TDb, options?: DrizzleAdapterOptions): DatabaseAdapter<TDb, TTx> {
   const manager = new TransactionManager();
@@ -44,8 +49,15 @@ export function createDrizzleAdapter<
       txOptions?: TransactionOptions,
     ): Promise<TResult> {
       return await manager.execute<TTx, TResult>(
-        async (runInTx) =>
-          (await db.transaction(runInTx as (tx: TTx) => Promise<unknown>)) as TResult,
+        async (runInTx) => {
+          const config = txOptions?.isolationLevel
+            ? { isolationLevel: txOptions.isolationLevel }
+            : undefined;
+          return (await db.transaction(
+            runInTx as (tx: TTx) => Promise<unknown>,
+            config,
+          )) as TResult;
+        },
         handler,
         txOptions,
       );

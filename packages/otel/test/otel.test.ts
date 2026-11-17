@@ -196,4 +196,77 @@ describe('@shukoi/otel OpenTelemetry & Prometheus Integration', () => {
       ]),
     ).resolves.not.toThrow();
   });
+
+  it('records exceptions conforming to OpenTelemetry semantic conventions', () => {
+    const tracer = new Tracer({ serviceName: 'test-service' });
+    const span = tracer.startSpan('failingOp', null, 'SERVER');
+    expect(span.kind).toBe('SERVER');
+
+    const err = new Error('Database connection refused');
+    span.recordException(err);
+    span.end();
+
+    const record = tracer.getQueue()[0];
+    expect(record?.status.code).toBe('ERROR');
+    expect(record?.status.message).toBe('Database connection refused');
+    expect(record?.attributes['exception.type']).toBe('Error');
+    expect(record?.attributes['exception.message']).toBe('Database connection refused');
+    expect(record?.attributes['exception.stacktrace']).toBeDefined();
+    expect(record?.kind).toBe('SERVER');
+  });
+
+  it('formats OTLP/HTTP payload with service.name under resource.attributes', async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+    const originalFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+        capturedBody = JSON.parse(init?.body as string) as Record<string, unknown>;
+        return new Response(JSON.stringify({}), { status: 200 });
+      }) as typeof fetch;
+
+      const exporter = new OtlpHttpSpanExporter({
+        endpoint: 'http://collector:4318/v1/traces',
+        serviceName: 'my-payment-api',
+        resourceAttributes: { 'deployment.environment': 'staging' },
+      });
+
+      await exporter.export([
+        {
+          name: 'checkout',
+          traceId: '11112222333344445555666677778888',
+          spanId: 'aaaabbbbccccdddd',
+          kind: 'SERVER',
+          startTimeMs: 1000,
+          endTimeMs: 1100,
+          durationMs: 100,
+          status: { code: 'OK' },
+          attributes: { 'http.status_code': 200 },
+        },
+      ]);
+
+      expect(capturedBody).toBeDefined();
+      const resourceSpans = (
+        capturedBody as {
+          resourceSpans: Array<{
+            resource: { attributes: Array<{ key: string; value: { stringValue: string } }> };
+            scopeSpans: Array<{ spans: Array<{ kind: number }> }>;
+          }>;
+        }
+      ).resourceSpans;
+      const resource = resourceSpans[0]?.resource;
+      expect(resource?.attributes).toContainEqual({
+        key: 'service.name',
+        value: { stringValue: 'my-payment-api' },
+      });
+      expect(resource?.attributes).toContainEqual({
+        key: 'deployment.environment',
+        value: { stringValue: 'staging' },
+      });
+
+      const span = resourceSpans[0]?.scopeSpans[0]?.spans[0];
+      expect(span?.kind).toBe(2); // SPAN_KIND_SERVER
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

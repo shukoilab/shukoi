@@ -12,7 +12,7 @@ import type { MetricDataPoint } from './types.js';
  * @purpose Formats label object into Prometheus label string format `{key="val",key2="val2"}`.
  * @param labels Key-value pairs.
  * @returns Formatted label string or empty string if labels object is empty.
- * @invariants Escapes quotes and backslashes in label values.
+ * @invariants Escapes quotes, backslashes, and newlines in label values.
  */
 function formatPrometheusLabels(labels: Readonly<Record<string, string>>): string {
   const entries = Object.entries(labels);
@@ -20,41 +20,52 @@ function formatPrometheusLabels(labels: Readonly<Record<string, string>>): strin
     return '';
   }
   const formatted = entries
-    .map(([k, v]) => `${k}="${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`)
+    .map(
+      ([k, v]) => `${k}="${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`,
+    )
     .join(',');
   return `{${formatted}}`;
 }
 
 /**
  * @purpose Serializes metric data points into standard Prometheus 0.0.4 text exposition string.
- * @rationale Renders # HELP and # TYPE headers and time-series value lines.
+ * @rationale Renders # HELP and # TYPE headers and groups time-series value lines by metric family.
  * @param dataPoints Array of collected MetricDataPoint records.
  * @returns Multi-line text string ending with newline.
  * @throws Never throws.
- * @invariants Big-O O(N) over metric series count.
+ * @invariants Big-O O(N) over metric series count; guarantees contiguous metric family grouping.
  */
 export function serializeToPrometheusText(dataPoints: readonly MetricDataPoint[]): string {
   const lines: string[] = [];
-  const emittedHeaders = new Set<string>();
 
+  // Group data points by metric name to guarantee contiguous metric family emission
+  const grouped = new Map<string, MetricDataPoint[]>();
   for (const dp of dataPoints) {
-    if (!emittedHeaders.has(dp.name)) {
-      lines.push(`# HELP ${dp.name} ${dp.help}`);
-      lines.push(`# TYPE ${dp.name} ${dp.type}`);
-      emittedHeaders.add(dp.name);
+    const list = grouped.get(dp.name) ?? [];
+    list.push(dp);
+    grouped.set(dp.name, list);
+  }
+
+  for (const [name, points] of grouped.entries()) {
+    const first = points[0];
+    if (first) {
+      lines.push(`# HELP ${name} ${first.help}`);
+      lines.push(`# TYPE ${name} ${first.type}`);
     }
 
-    if (dp.type === 'histogram' && dp.buckets) {
-      for (const bucket of dp.buckets) {
-        const bucketLabels = { ...dp.labels, le: String(bucket.le) };
-        lines.push(`${dp.name}_bucket${formatPrometheusLabels(bucketLabels)} ${bucket.count}`);
+    for (const dp of points) {
+      if (dp.type === 'histogram' && dp.buckets) {
+        for (const bucket of dp.buckets) {
+          const bucketLabels = { ...dp.labels, le: String(bucket.le) };
+          lines.push(`${dp.name}_bucket${formatPrometheusLabels(bucketLabels)} ${bucket.count}`);
+        }
+        const infLabels = { ...dp.labels, le: '+Inf' };
+        lines.push(`${dp.name}_bucket${formatPrometheusLabels(infLabels)} ${dp.count ?? 0}`);
+        lines.push(`${dp.name}_sum${formatPrometheusLabels(dp.labels)} ${dp.sum ?? 0}`);
+        lines.push(`${dp.name}_count${formatPrometheusLabels(dp.labels)} ${dp.count ?? 0}`);
+      } else {
+        lines.push(`${dp.name}${formatPrometheusLabels(dp.labels)} ${dp.value}`);
       }
-      const infLabels = { ...dp.labels, le: '+Inf' };
-      lines.push(`${dp.name}_bucket${formatPrometheusLabels(infLabels)} ${dp.count ?? 0}`);
-      lines.push(`${dp.name}_sum${formatPrometheusLabels(dp.labels)} ${dp.sum ?? 0}`);
-      lines.push(`${dp.name}_count${formatPrometheusLabels(dp.labels)} ${dp.count ?? 0}`);
-    } else {
-      lines.push(`${dp.name}${formatPrometheusLabels(dp.labels)} ${dp.value}`);
     }
   }
 

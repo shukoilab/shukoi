@@ -143,4 +143,30 @@ describe('@shukoi/ratelimit Suite', () => {
     expect(cache.get('c')).toBe(3);
     expect(cache.get('d')).toBe(4);
   });
+
+  it('evaluates distributed Token Bucket in Redis via MockRateLimitRedisClient', async () => {
+    const redisMock = new MockRateLimitRedisClient();
+    const limiter = createRateLimiter({
+      algorithm: tokenBucket({
+        capacity: 10,
+        refillRate: 2,
+        intervalMs: 1000,
+        client: redisMock,
+      }),
+    });
+
+    const res1 = await limiter.limit('distributed-user', 6);
+    expect(res1.success).toBe(true);
+    expect(res1.remaining).toBe(4);
+
+    const res2 = await limiter.limit('distributed-user', 5);
+    expect(res2.success).toBe(false);
+    expect(res2.remaining).toBe(4);
+    expect(res2.retryAfter).toBeGreaterThanOrEqual(1);
+
+    const headers = limiter.getHeaders(res2, 60);
+    expect(headers['RateLimit-Limit']).toBe('10');
+    expect(headers['RateLimit-Policy']).toBe('10;w=60');
+    expect(headers['Retry-After']).toBeDefined();
+  });
 });

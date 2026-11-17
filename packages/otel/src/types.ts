@@ -49,6 +49,13 @@ export interface SpanStatus {
 }
 
 /**
+ * @purpose OpenTelemetry standard SpanKind classification.
+ * @rationale Categorizes span relationship within distributed systems (1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER, 5=CONSUMER).
+ * @invariants String union conforming to OpenTelemetry specification.
+ */
+export type SpanKind = 'INTERNAL' | 'SERVER' | 'CLIENT' | 'PRODUCER' | 'CONSUMER';
+
+/**
  * @purpose Materialized immutable record of a completed span ready for export.
  * @rationale Decoupled snapshot of span execution history.
  * @invariants Immutable data transfer object.
@@ -58,6 +65,7 @@ export interface SpanRecord {
   readonly traceId: string;
   readonly spanId: string;
   readonly parentSpanId?: string | undefined;
+  readonly kind?: SpanKind | undefined;
   readonly startTimeMs: number;
   readonly endTimeMs: number;
   readonly durationMs: number;

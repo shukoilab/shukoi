@@ -31,7 +31,12 @@ export interface KyselyAdapterOptions {
  */
 export function createKyselyAdapter<
   TDb extends {
-    transaction: () => { execute: (cb: (trx: TTrx) => Promise<unknown>) => Promise<unknown> };
+    transaction: () => {
+      setIsolationLevel?: (level: string) => {
+        execute: (cb: (trx: TTrx) => Promise<unknown>) => Promise<unknown>;
+      };
+      execute: (cb: (trx: TTrx) => Promise<unknown>) => Promise<unknown>;
+    };
     destroy?: () => Promise<void>;
   },
   TTrx = unknown,
@@ -55,8 +60,13 @@ export function createKyselyAdapter<
       txOptions?: TransactionOptions,
     ): Promise<TResult> {
       return await manager.execute<TTrx, TResult>(
-        async (runInTx) =>
-          (await db.transaction().execute(runInTx as (trx: TTrx) => Promise<unknown>)) as TResult,
+        async (runInTx) => {
+          let builder = db.transaction();
+          if (txOptions?.isolationLevel && typeof builder.setIsolationLevel === 'function') {
+            builder = builder.setIsolationLevel(txOptions.isolationLevel);
+          }
+          return (await builder.execute(runInTx as (trx: TTrx) => Promise<unknown>)) as TResult;
+        },
         handler,
         txOptions,
       );

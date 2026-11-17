@@ -35,7 +35,7 @@ export function createPrismaAdapter<
   TPrisma extends {
     $transaction: (
       cb: (tx: TTx) => Promise<unknown>,
-      options?: { maxWait?: number; timeout?: number },
+      options?: { maxWait?: number; timeout?: number; isolationLevel?: string },
     ) => Promise<unknown>;
     $disconnect?: () => Promise<void>;
   },
@@ -61,13 +61,16 @@ export function createPrismaAdapter<
     ): Promise<TResult> {
       return await manager.execute<TTx, TResult>(
         async (runInTx) => {
-          const txConfig: { maxWait?: number; timeout?: number } = {};
+          const txConfig: { maxWait?: number; timeout?: number; isolationLevel?: string } = {};
           if (options?.maxWaitMs !== undefined) {
             txConfig.maxWait = options.maxWaitMs;
           }
           const effectiveTimeout = txOptions?.timeoutMs ?? options?.timeoutMs;
           if (effectiveTimeout !== undefined) {
             txConfig.timeout = effectiveTimeout;
+          }
+          if (txOptions?.isolationLevel !== undefined) {
+            txConfig.isolationLevel = txOptions.isolationLevel;
           }
           return (await prisma.$transaction(
             runInTx as (tx: TTx) => Promise<unknown>,
